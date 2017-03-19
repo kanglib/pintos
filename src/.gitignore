@@ -2,8 +2,4 @@ cscope.files
 cscope.out
 TAGS
 tags
-
-threads/.ycm_extra_conf.py
-userprog/.ycm_extra_conf.py
-vm/.ycm_extra_conf.py
-filesys/.ycm_extra_conf.py
+.ycm_extra_conf.py
