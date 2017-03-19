@@ -24,6 +24,9 @@ static int64_t ticks;
    Initialized by timer_calibrate(). */
 static unsigned loops_per_tick;
 
+/* List of waiting threads. */
+static struct list thread_list;
+
 static intr_handler_func timer_interrupt;
 static bool too_many_loops (unsigned loops);
 static void busy_wait (int64_t loops);
@@ -42,6 +45,8 @@ timer_init (void)
   outb (0x43, 0x34);    /* CW: counter 0, LSB then MSB, mode 2, binary. */
   outb (0x40, count & 0xff);
   outb (0x40, count >> 8);
+
+  list_init(&thread_list);
 
   intr_register_ext (0x20, timer_interrupt, "8254 Timer");
 }
@@ -96,11 +101,12 @@ timer_elapsed (int64_t then)
 void
 timer_sleep (int64_t ticks) 
 {
-  int64_t start = timer_ticks ();
-
-  ASSERT (intr_get_level () == INTR_ON);
-  while (timer_elapsed (start) < ticks) 
-    thread_yield ();
+  enum intr_level old_level = intr_disable();
+  struct thread *current = thread_current();
+  current->waiting_ticks = ticks;
+  list_push_back(&thread_list, &current->elem);
+  thread_block();
+  intr_set_level(old_level);
 }
 
 /* Suspends execution for approximately MS milliseconds. */
@@ -135,6 +141,17 @@ timer_print_stats (void)
 static void
 timer_interrupt (struct intr_frame *args UNUSED)
 {
+  struct list_elem *e;
+
+  for (e = list_begin(&thread_list); e != list_end(&thread_list);
+          e = list_next(e)) {
+    struct thread *t = list_entry(e, struct thread, elem);
+    if (--t->waiting_ticks == 0) {
+      list_remove(e);
+      thread_unblock(t);
+    }
+  }
+
   ticks++;
   thread_tick ();
 }
