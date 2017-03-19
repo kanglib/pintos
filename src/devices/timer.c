@@ -101,12 +101,14 @@ timer_elapsed (int64_t then)
 void
 timer_sleep (int64_t ticks) 
 {
-  enum intr_level old_level = intr_disable();
-  struct thread *current = thread_current();
-  current->waiting_ticks = ticks;
-  list_push_back(&thread_list, &current->elem);
-  thread_block();
-  intr_set_level(old_level);
+  if (ticks > 0) {
+    enum intr_level old_level = intr_disable();
+    struct thread *current = thread_current();
+    current->waiting_ticks = ticks;
+    list_push_back(&thread_list, &current->elem);
+    thread_block();
+    intr_set_level(old_level);
+  }
 }
 
 /* Suspends execution for approximately MS milliseconds. */
