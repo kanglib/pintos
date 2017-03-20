@@ -150,9 +150,10 @@ timer_interrupt (struct intr_frame *args UNUSED)
           e = list_next(e)) {
     struct thread *t = list_entry(e, struct thread, timer_elem);
     if (--t->waiting_ticks == 0) {
+      thread_unblock(t);
+
       /* list_remove(e) works just fine but is not ideal. */
       e = list_remove(e)->prev;
-      thread_unblock(t);
     }
   }
 
