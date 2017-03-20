@@ -101,6 +101,7 @@ timer_elapsed (int64_t then)
 void
 timer_sleep (int64_t ticks) 
 {
+  /* Do not use ASSERT, or the test crashes. */
   if (ticks > 0) {
     enum intr_level old_level = intr_disable();
     struct thread *current = thread_current();
@@ -149,7 +150,8 @@ timer_interrupt (struct intr_frame *args UNUSED)
           e = list_next(e)) {
     struct thread *t = list_entry(e, struct thread, timer_elem);
     if (--t->waiting_ticks == 0) {
-      list_remove(e);
+      /* list_remove(e) works just fine but is not ideal. */
+      e = list_remove(e)->prev;
       thread_unblock(t);
     }
   }
