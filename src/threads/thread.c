@@ -475,9 +475,10 @@ next_thread_to_run (void)
       if(priority > maxPriority) {
         priorElem = e;
         priorThread = t;
+        maxPriority = priority;
       }
     }
-    list_remove(e);
+    list_remove(priorElem);
     return priorThread;
   }
    // return list_entry (list_pop_front (&ready_list), struct thread, elem);
