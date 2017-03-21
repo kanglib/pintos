@@ -469,9 +469,9 @@ next_thread_to_run (void)
   if (list_empty(&ready_list)) {
     return idle_thread;
   } else {
-    return list_entry(list_max(&ready_list, priority_less, NULL),
-                      struct thread,
-                      elem);
+    struct list_elem *e = list_max(&ready_list, priority_less, NULL);
+    list_remove(e);
+    return list_entry(e, struct thread, elem);
   }
 }
 
