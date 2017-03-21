@@ -237,6 +237,8 @@ thread_unblock (struct thread *t)
   ASSERT (t->status == THREAD_BLOCKED);
   list_push_back (&ready_list, &t->elem);
   t->status = THREAD_READY;
+  if(t->priority > thread_get_priority())
+    thread_yield();
   intr_set_level (old_level);
 }
 
@@ -314,7 +316,9 @@ thread_yield (void)
 void
 thread_set_priority (int new_priority) 
 {
+  int old_priority = thread_current ()->priority;
   thread_current ()->priority = new_priority;
+  if(old_priority > new_priority) thread_yield();
 }
 
 /* Returns the current thread's priority. */
@@ -403,7 +407,7 @@ kernel_thread (thread_func *function, void *aux)
   function (aux);       /* Execute the thread function. */
   thread_exit ();       /* If function() returns, kill the thread. */
 }
-
+
 /* Returns the running thread. */
 struct thread *
 running_thread (void) 
@@ -566,7 +570,7 @@ allocate_tid (void)
 
   return tid;
 }
-
+
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
