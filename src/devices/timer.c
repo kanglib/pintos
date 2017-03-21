@@ -147,7 +147,7 @@ timer_interrupt (struct intr_frame *args UNUSED)
   struct list_elem *e;
 
   for (e = list_begin(&thread_list); e != list_end(&thread_list);
-          e = list_next(e)) {
+      e = list_next(e)) {
     struct thread *t = list_entry(e, struct thread, timer_elem);
     if (--t->waiting_ticks == 0) {
       thread_unblock(t);
