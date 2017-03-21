@@ -485,7 +485,6 @@ next_thread_to_run (void)
     list_remove(priorElem);
     return priorThread;
   }
-   // return list_entry (list_pop_front (&ready_list), struct thread, elem);
 }
 
 /* Completes a thread switch by activating the new thread's page
