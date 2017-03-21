@@ -472,16 +472,18 @@ alloc_frame (struct thread *t, size_t size)
 static struct thread *
 next_thread_to_run (void) 
 {
-  struct list_elem *e, *priorElem;
-  struct thread *priorThread;
+  struct list_elem *e;
+  struct list_elem *priorElem = NULL;
+  struct thread *priorThread = NULL;
   int maxPriority = -1;
-  if (list_empty (&ready_list))
+  if (list_empty(&ready_list)) {
     return idle_thread;
-  else {
-    for(e = list_begin(&ready_list); e != list_end(&ready_list); e = list_next(e)){
+  } else {
+    for (e = list_begin(&ready_list); e != list_end(&ready_list);
+        e = list_next(e)) {
       struct thread *t = list_entry(e, struct thread, elem);
       int priority = t->priority;
-      if(priority > maxPriority) {
+      if (priority > maxPriority) {
         priorElem = e;
         priorThread = t;
         maxPriority = priority;
