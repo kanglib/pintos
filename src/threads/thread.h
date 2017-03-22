@@ -137,4 +137,6 @@ void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
+struct thread *thread_get_highest(struct list *list);
+
 #endif /* threads/thread.h */

@@ -70,6 +70,9 @@ static void *alloc_frame (struct thread *, size_t size);
 static void schedule (void);
 void schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
+static bool priority_less(const struct list_elem *a_,
+                          const struct list_elem *b_,
+                          void *aux UNUSED);
 
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
@@ -361,6 +364,13 @@ thread_get_recent_cpu (void)
   /* Not yet implemented. */
   return 0;
 }
+
+struct thread *thread_get_highest(struct list *list)
+{
+  struct list_elem *e = list_max(list, priority_less, NULL);
+  list_remove(e);
+  return list_entry(e, struct thread, elem);
+}
 
 /* Idle thread.  Executes when no other thread is ready to run.
 
@@ -470,26 +480,10 @@ alloc_frame (struct thread *t, size_t size)
 static struct thread *
 next_thread_to_run (void) 
 {
-  struct list_elem *e;
-  struct list_elem *priorElem = NULL;
-  struct thread *priorThread = NULL;
-  int maxPriority = -1;
-  if (list_empty(&ready_list)) {
+  if (list_empty(&ready_list))
     return idle_thread;
-  } else {
-    for (e = list_begin(&ready_list); e != list_end(&ready_list);
-        e = list_next(e)) {
-      struct thread *t = list_entry(e, struct thread, elem);
-      int priority = t->priority;
-      if (priority > maxPriority) {
-        priorElem = e;
-        priorThread = t;
-        maxPriority = priority;
-      }
-    }
-    list_remove(priorElem);
-    return priorThread;
-  }
+  else
+    return thread_get_highest(&ready_list);
 }
 
 /* Completes a thread switch by activating the new thread's page
@@ -573,6 +567,16 @@ allocate_tid (void)
   lock_release (&tid_lock);
 
   return tid;
+}
+
+static bool priority_less(const struct list_elem *a_,
+                          const struct list_elem *b_,
+                          void *aux UNUSED)
+{
+  const struct thread *a = list_entry(a_, struct thread, elem);
+  const struct thread *b = list_entry(b_, struct thread, elem);
+
+  return a->priority < b->priority;
 }
 
 /* Offset of `stack' member within `struct thread'.
