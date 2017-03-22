@@ -32,6 +32,8 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 
+struct list donee_list;
+
 /* Initializes semaphore SEMA to VALUE.  A semaphore is a
    nonnegative integer along with two atomic operators for
    manipulating it:
@@ -197,19 +199,23 @@ lock_init (struct lock *lock)
 void
 lock_acquire (struct lock *lock)
 {
+  struct donee donee;
+  int hp;
+
   ASSERT (lock != NULL);
   ASSERT (!intr_context ());
   ASSERT (!lock_held_by_current_thread (lock));
 
   //L is lock holder, and thread_current is H
-  int hp = thread_get_priority(), lp;
-  if(lock->holder && lock->holder->priority < hp){
-    lp = lock->holder->priority;
-    lock->holder->priority = hp;
+  donee.holder = lock->holder;
+  hp = thread_get_priority();
+  if(donee.holder && donee.holder->priority < hp) {
+    donee.priority = donee.holder->priority;
+    donee.holder->priority = hp;
+    list_push_back(&donee_list, &donee.elem);
   }
 
   sema_down (&lock->semaphore);
-  lock->holder->priority = lp;
   lock->holder = thread_current ();
 }
 
@@ -242,8 +248,21 @@ lock_try_acquire (struct lock *lock)
 void
 lock_release (struct lock *lock) 
 {
+  struct donee *donee;
+  struct list_elem *e;
+
   ASSERT (lock != NULL);
   ASSERT (lock_held_by_current_thread (lock));
+
+  for (e = list_begin(&donee_list); e != list_end(&donee_list);
+      e = list_next(e)) {
+    donee = list_entry(e, struct donee, elem);
+    if (donee->holder == lock->holder) {
+      donee->holder->priority = donee->priority;
+      list_remove(e);
+      break;
+    }
+  }
 
   lock->holder = NULL;
   sema_up (&lock->semaphore);
