@@ -96,6 +96,9 @@ struct thread
     int64_t waiting_ticks;              /* Remaining ticks for waiting. */
     struct list_elem timer_elem;        /* List element of thread_list. */
 
+    /* Owned by synch.c. */
+    struct list donation_list;          /* List of donation information. */
+
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
@@ -104,6 +107,12 @@ struct thread
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
   };
+
+struct donation {
+  struct lock *lock;
+  int priority;
+  struct list_elem elem;
+};
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.

@@ -32,8 +32,6 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 
-struct list donee_list;
-
 /* Initializes semaphore SEMA to VALUE.  A semaphore is a
    nonnegative integer along with two atomic operators for
    manipulating it:
@@ -199,20 +197,26 @@ lock_init (struct lock *lock)
 void
 lock_acquire (struct lock *lock)
 {
-  struct donee donee;
+  struct thread *holder;
+  int lp;
   int hp;
 
   ASSERT (lock != NULL);
   ASSERT (!intr_context ());
   ASSERT (!lock_held_by_current_thread (lock));
 
-  //L is lock holder, and thread_current is H
-  donee.holder = lock->holder;
+  /* L is the lock holder, and H is the current thread. */
+  holder = lock->holder;
   hp = thread_get_priority();
-  if(donee.holder && donee.holder->priority < hp) {
-    donee.priority = donee.holder->priority;
-    donee.holder->priority = hp;
-    list_push_back(&donee_list, &donee.elem);
+  if (holder && holder->priority < hp) {
+    struct donation d;
+
+    lp = holder->priority;
+    holder->priority = hp;
+
+    d.lock = lock;
+    d.priority = lp;
+    list_push_front(&holder->donation_list, &d.elem);
   }
 
   sema_down (&lock->semaphore);
@@ -248,24 +252,25 @@ lock_try_acquire (struct lock *lock)
 void
 lock_release (struct lock *lock) 
 {
-  struct donee *donee;
+  struct list *donation_list;
   struct list_elem *e;
 
   ASSERT (lock != NULL);
   ASSERT (lock_held_by_current_thread (lock));
 
-  for (e = list_begin(&donee_list); e != list_end(&donee_list);
-      e = list_next(e)) {
-    donee = list_entry(e, struct donee, elem);
-    if (donee->holder == lock->holder) {
-      donee->holder->priority = donee->priority;
-      list_remove(e);
-      break;
-    }
-  }
-
   lock->holder = NULL;
   sema_up (&lock->semaphore);
+
+  donation_list = &thread_current()->donation_list;
+  for (e = list_begin(donation_list); e != list_end(donation_list);
+      e = list_next(e)) {
+    struct donation *d = list_entry(e, struct donation, elem);
+    //if (d->lock == lock) {
+      list_remove(e);
+      thread_set_priority(d->priority);
+      break;
+    //}
+  }
 }
 
 /* Returns true if the current thread holds LOCK, false
