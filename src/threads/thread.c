@@ -320,10 +320,15 @@ void
 thread_set_priority (int new_priority) 
 {
   struct thread *t = thread_current();
-  int old_priority = t->priority;
-  t->priority = new_priority;
-  if (old_priority > new_priority)
-    thread_yield();
+  if (list_empty(&t->donation_list)) {
+    int old_priority = t->priority;
+    t->priority = new_priority;
+    t->deferred_priority = new_priority;
+    if (old_priority > new_priority)
+      thread_yield();
+  } else {
+    t->deferred_priority = new_priority;
+  }
 }
 
 /* Returns the current thread's priority. */
@@ -457,6 +462,7 @@ init_thread (struct thread *t, const char *name, int priority)
   t->priority = priority;
   t->donation.lock = NULL;
   list_init(&t->donation_list);
+  t->deferred_priority = priority;
   t->magic = THREAD_MAGIC;
 }
 

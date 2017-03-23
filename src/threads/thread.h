@@ -108,6 +108,7 @@ struct thread
     /* Owned by synch.c. */
     struct donation donation;
     struct list donation_list;
+    int deferred_priority;
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */

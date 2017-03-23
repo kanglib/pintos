@@ -230,7 +230,10 @@ lock_acquire (struct lock *lock)
   if (d->lock) {
     list_remove(&d->elem);
     d->lock = NULL;
-    d->donee->priority = d->lp;
+    if (list_empty(&d->donee->donation_list))
+      d->donee->priority = d->donee->deferred_priority;
+    else
+      d->donee->priority = d->lp;
   }
 }
 
