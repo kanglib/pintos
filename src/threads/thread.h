@@ -98,6 +98,7 @@ struct thread
 
     /* Owned by synch.c. */
     struct list donation_list;          /* List of donation information. */
+    int donation_count;                 /* Number of times being donated. */
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
@@ -110,6 +111,7 @@ struct thread
 
 struct donation {
   struct lock *lock;
+  struct thread *holder;
   int priority;
   struct list_elem elem;
 };
