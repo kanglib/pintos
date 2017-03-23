@@ -213,6 +213,8 @@ lock_acquire (struct lock *lock)
   hp = thread_get_priority();
 
   if (donee && donee->priority < hp) {
+    struct donation *cursor;
+
     lp = donee->priority;
     donee->priority = hp;
 
@@ -222,6 +224,13 @@ lock_acquire (struct lock *lock)
     d->hp = hp;
     d->lp = lp;
     list_push_front(&donee->donation_list, &d->elem);
+
+    for (cursor = &donee->donation; cursor->lock;
+        cursor = &cursor->donee->donation) {
+      if (cursor->donee->priority >= hp)
+        break;
+      cursor->donee->priority = hp;
+    }
   }
 
   sema_down (&lock->semaphore);
