@@ -230,10 +230,10 @@ lock_acquire (struct lock *lock)
   for (e = list_begin(donation_list); e != list_end(donation_list);
       e = list_next(e)) {
     struct donation *d = list_entry(e, struct donation, elem);
-      list_remove(e);
-      d->holder->priority = d->priority;
-      d->holder->donation_count--;
-      break;
+    list_remove(e);
+    d->holder->priority = d->priority;
+    d->holder->donation_count--;
+    break;
   }
 }
 
