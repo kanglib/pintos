@@ -24,13 +24,15 @@ typedef int tid_t;
 #define PRI_DEFAULT 31                  /* Default priority. */
 #define PRI_MAX 63                      /* Highest priority. */
 
+/* Priority donation information.
+   Used in thread structures. */
 struct donation {
-  struct lock *lock;
-  struct thread *donor;
-  struct thread *donee;
-  int hp;
-  int lp;
-  struct list_elem elem;
+  struct lock *lock;                    /* Lock caused priority inversion. */
+  struct thread *donor;                 /* Donor thread. */
+  struct thread *donee;                 /* Donee thread. */
+  int hp;                               /* Higher (donated) priority. */
+  int lp;                               /* Lower (original) priority. */
+  struct list_elem elem;                /* List element of donation_list. */
 };
 
 /* A kernel thread or user process.
@@ -99,6 +101,7 @@ struct thread
     int priority;                       /* Priority. */
 
     /* Shared between thread.c and synch.c. */
+    int deferred_priority;              /* Deferred by thread_set_priority(). */
     struct list_elem elem;              /* List element. */
 
     /* Owned by devices/timer.c. */
@@ -106,9 +109,8 @@ struct thread
     struct list_elem timer_elem;        /* List element of thread_list. */
 
     /* Owned by synch.c. */
-    struct donation donation;
-    struct list donation_list;
-    int deferred_priority;
+    struct donation donation;           /* Priority donation information. */
+    struct list donation_list;          /* List of received donations. */
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */

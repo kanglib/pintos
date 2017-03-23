@@ -424,7 +424,7 @@ kernel_thread (thread_func *function, void *aux)
   function (aux);       /* Execute the thread function. */
   thread_exit ();       /* If function() returns, kill the thread. */
 }
-
+
 /* Returns the running thread. */
 struct thread *
 running_thread (void) 
@@ -575,7 +575,7 @@ allocate_tid (void)
 
   return tid;
 }
-
+
 static bool priority_less(const struct list_elem *a_,
                           const struct list_elem *b_,
                           void *aux UNUSED)
