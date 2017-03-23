@@ -24,6 +24,15 @@ typedef int tid_t;
 #define PRI_DEFAULT 31                  /* Default priority. */
 #define PRI_MAX 63                      /* Highest priority. */
 
+struct donation {
+  struct lock *lock;
+  struct thread *donor;
+  struct thread *donee;
+  int hp;
+  int lp;
+  struct list_elem elem;
+};
+
 /* A kernel thread or user process.
 
    Each thread structure is stored in its own 4 kB page.  The
@@ -97,8 +106,8 @@ struct thread
     struct list_elem timer_elem;        /* List element of thread_list. */
 
     /* Owned by synch.c. */
-    struct list donation_list;          /* List of donation information. */
-    int donation_count;                 /* Number of times being donated. */
+    struct donation donation;
+    struct list donation_list;
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
@@ -108,13 +117,6 @@ struct thread
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
   };
-
-struct donation {
-  struct lock *lock;
-  struct thread *holder;
-  int priority;
-  struct list_elem elem;
-};
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
