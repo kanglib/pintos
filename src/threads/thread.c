@@ -319,7 +319,10 @@ thread_yield (void)
 void
 thread_set_priority (int new_priority) 
 {
+  enum intr_level old_level;
   struct thread *t = thread_current();
+
+  old_level = intr_disable();
   if (list_empty(&t->donation_list)) {
     int old_priority = t->priority;
     t->priority = new_priority;
@@ -329,6 +332,7 @@ thread_set_priority (int new_priority)
   } else {
     t->deferred_priority = new_priority;
   }
+  intr_set_level(old_level);
 }
 
 /* Returns the current thread's priority. */
