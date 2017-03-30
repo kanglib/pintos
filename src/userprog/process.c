@@ -88,6 +88,7 @@ start_process (void *f_name)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
+  for (;;) ;
   return -1;
 }
 
@@ -336,6 +337,8 @@ load (const char *file_name, void (**eip) (void), void **esp)
     *(char **) sp = argv[i];
   }
 
+  sp -= 4;
+  *(void **) sp = sp + 4;
   sp -= 4;
   *(int *) sp = argc;
   *esp = sp - 4;
