@@ -18,6 +18,7 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 
+static bool parse(const char *cmdline, void **esp);
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 
@@ -43,6 +44,50 @@ process_execute (const char *file_name)
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
   return tid;
+}
+
+static bool parse(const char *cmdline, void **esp)
+{
+  bool success = false;
+  if (strnlen(cmdline, PGSIZE) < PGSIZE) {
+    char **argv;
+    if ((argv = palloc_get_page(0))) {
+      char *s;
+      if ((s = palloc_get_page(0))) {
+        char *token;
+        char *save_ptr;
+        void *sp = PHYS_BASE;
+        int argc = 0;
+        int i;
+
+        strlcpy(s, cmdline, PGSIZE);
+        for (token = strtok_r(s, " ", &save_ptr); token;
+            token = strtok_r(NULL, " ", &save_ptr))
+          argv[argc++] = token;
+
+        for (i = 0; i < argc; i++) {
+          int length = strlen(argv[i]);
+          sp -= length + 1;
+          strlcpy(sp, argv[i], length);
+        }
+
+        sp -= (int) sp % 4 + 4;
+        for (i = argc - 1; i >= 0; i--) {
+          sp -= 4;
+          *(char **) sp = argv[i];
+        }
+
+        sp -= 4;
+        *(int *) sp = argc;
+        *esp = sp - 4;
+        success = true;
+
+        palloc_free_page(s);
+      }
+      palloc_free_page(argv);
+    }
+  }
+  return success;
 }
 
 /* A thread function that loads a user process and makes it start
