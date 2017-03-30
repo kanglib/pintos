@@ -323,13 +323,14 @@ load (const char *file_name, void (**eip) (void), void **esp)
     goto done;
 
   sp = *esp;
-  for (i = 0; i < argc; i++) {
-    int length = strnlen(argv[i], PGSIZE);
-    sp -= length + 1;
-    strlcpy(sp, argv[i], length);
+  for (i = argc - 1; i >= 0; i--) {
+    int real_len = strnlen(argv[i], PGSIZE) + 1;
+    sp -= real_len;
+    strlcpy(sp, argv[i], real_len);
+    argv[i] = sp;
   }
 
-  sp -= (int) sp % 4 + 4;
+  sp -= ((int) sp & (4 - 1)) + 4;
   for (i = argc - 1; i >= 0; i--) {
     sp -= 4;
     *(char **) sp = argv[i];
