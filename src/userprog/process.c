@@ -18,7 +18,6 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 
-static bool parse(const char *cmdline, void **esp);
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 
@@ -44,50 +43,6 @@ process_execute (const char *file_name)
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
   return tid;
-}
-
-static bool parse(const char *cmdline, void **esp)
-{
-  bool success = false;
-  if (strnlen(cmdline, PGSIZE) < PGSIZE) {
-    char **argv;
-    if ((argv = palloc_get_page(0))) {
-      char *s;
-      if ((s = palloc_get_page(0))) {
-        char *token;
-        char *save_ptr;
-        void *sp = PHYS_BASE;
-        int argc = 0;
-        int i;
-
-        strlcpy(s, cmdline, PGSIZE);
-        for (token = strtok_r(s, " ", &save_ptr); token;
-            token = strtok_r(NULL, " ", &save_ptr))
-          argv[argc++] = token;
-
-        for (i = 0; i < argc; i++) {
-          int length = strlen(argv[i]);
-          sp -= length + 1;
-          strlcpy(sp, argv[i], length);
-        }
-
-        sp -= (int) sp % 4 + 4;
-        for (i = argc - 1; i >= 0; i--) {
-          sp -= 4;
-          *(char **) sp = argv[i];
-        }
-
-        sp -= 4;
-        *(int *) sp = argc;
-        *esp = sp - 4;
-        success = true;
-
-        palloc_free_page(s);
-      }
-      palloc_free_page(argv);
-    }
-  }
-  return success;
 }
 
 /* A thread function that loads a user process and makes it start
@@ -256,9 +211,26 @@ load (const char *file_name, void (**eip) (void), void **esp)
   struct thread *t = thread_current ();
   struct Elf32_Ehdr ehdr;
   struct file *file = NULL;
+  char **argv = NULL;
+  char *s = NULL;
+  char *token;
+  char *save_ptr;
+  void *sp;
   off_t file_ofs;
   bool success = false;
+  int argc;
   int i;
+
+  if ((argv = palloc_get_page(0)) == NULL)
+    goto done;
+  if ((s = palloc_get_page(0)) == NULL)
+    goto done;
+
+  argc = 0;
+  strlcpy(s, file_name, PGSIZE);
+  for (token = strtok_r(s, " ", &save_ptr); token;
+      token = strtok_r(NULL, " ", &save_ptr))
+    argv[argc++] = token;
 
   /* Allocate and activate page directory. */
   t->pagedir = pagedir_create ();
@@ -267,10 +239,10 @@ load (const char *file_name, void (**eip) (void), void **esp)
   process_activate ();
 
   /* Open executable file. */
-  file = filesys_open (file_name);
+  file = filesys_open(argv[0]);
   if (file == NULL) 
     {
-      printf ("load: %s: open failed\n", file_name);
+      printf("load: %s: open failed\n", argv[0]);
       goto done; 
     }
 
@@ -283,7 +255,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
       || ehdr.e_phentsize != sizeof (struct Elf32_Phdr)
       || ehdr.e_phnum > 1024) 
     {
-      printf ("load: %s: error loading executable\n", file_name);
+      printf("load: %s: error loading executable\n", argv[0]);
       goto done; 
     }
 
@@ -350,6 +322,23 @@ load (const char *file_name, void (**eip) (void), void **esp)
   if (!setup_stack (esp))
     goto done;
 
+  sp = *esp;
+  for (i = 0; i < argc; i++) {
+    int length = strnlen(argv[i], PGSIZE);
+    sp -= length + 1;
+    strlcpy(sp, argv[i], length);
+  }
+
+  sp -= (int) sp % 4 + 4;
+  for (i = argc - 1; i >= 0; i--) {
+    sp -= 4;
+    *(char **) sp = argv[i];
+  }
+
+  sp -= 4;
+  *(int *) sp = argc;
+  *esp = sp - 4;
+
   /* Start address. */
   *eip = (void (*) (void)) ehdr.e_entry;
 
@@ -358,6 +347,8 @@ load (const char *file_name, void (**eip) (void), void **esp)
  done:
   /* We arrive here whether the load is successful or not. */
   file_close (file);
+  palloc_free_page(s);
+  palloc_free_page(argv);
   return success;
 }
 
