@@ -65,7 +65,7 @@ syscall_handler (struct intr_frame *f UNUSED)
   }
 
 
-  //thread_exit ();
+  thread_exit ();
 }
 
 static void *
@@ -79,7 +79,7 @@ static bool
 handle_write (int fd, const void *buffer, unsigned size) {
   if(fd == 1) {
     printf((char *)buffer);
-  }
+  ;}
   return true;
 }
 
