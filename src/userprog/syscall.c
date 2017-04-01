@@ -6,12 +6,18 @@
 #include "userprog/pagedir.h"
 #include "threads/vaddr.h"
 #include "threads/init.h"
+#include "userprog/process.h"
 
 #define ARG(n) (get_user(esp+(n)*4))
 
 static void syscall_handler (struct intr_frame *);
 
 static bool handle_write (int, const void *, unsigned);
+static bool handle_exec (const char *);
+
+
+static int get_user (const void *uaddr);
+static bool put_user (const void *uaddr, uint8_t data); 
 
 void
 syscall_init (void) 
@@ -27,7 +33,7 @@ syscall_handler (struct intr_frame *f UNUSED)
   void *esp = f->esp;
   int number = get_user(esp);
   printf ("%d\n", number);
-  hex_dump(0, esp, 16, true);
+  hex_dump(0, esp, 200, true);
 
   switch(number){
     case SYS_EXIT:
@@ -39,6 +45,22 @@ syscall_handler (struct intr_frame *f UNUSED)
       break;
     case SYS_WRITE:
       handle_write(ARG(1), ARG(2), ARG(3));
+      break;
+    case SYS_EXEC:
+      handle_exec(ARG(1));
+      break;
+    case SYS_WAIT:
+      break;
+    case SYS_CREATE:
+    case SYS_REMOVE:
+    case SYS_OPEN:
+    case SYS_FILESIZE:
+    case SYS_READ:
+    case SYS_SEEK:
+    case SYS_TELL:
+    case SYS_CLOSE:
+      break;
+    default:
       break;
   }
 
@@ -58,6 +80,16 @@ handle_write (int fd, const void *buffer, unsigned size) {
   if(fd == 1) {
     printf((char *)buffer);
   }
+  return true;
+}
+
+static bool
+handle_exec (const char *cmd) {
+  tid_t tid;
+  printf("EXEC %s\n", cmd);
+  tid = process_execute(cmd);
+
+  return tid != -1;
 }
 
 static int
@@ -72,15 +104,15 @@ get_user (const void *uaddr)
     return -1;
   }
 }
-//
-////static bool
-////put_user (const void *uaddr, uint8_t data) {
-////  uint32_t *pd = thread_current() -> pagedir;
-////  void *addr = valid_addr(pd, uaddr);
-////  if(addr){
-////    *((uint8_t)addr) = data;
-////  }else{
-////    return false;
-////  }
-////}
-//
+
+static bool
+put_user (const void *uaddr, uint8_t data) {
+  uint32_t *pd = thread_current() -> pagedir;
+  void *addr = valid_addr(pd, uaddr);
+  if(addr){
+    *((uint8_t *)addr) = data;
+  }else{
+    return false;
+  }
+}
+
