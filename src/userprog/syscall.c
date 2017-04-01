@@ -8,7 +8,8 @@
 #include "threads/init.h"
 #include "userprog/process.h"
 
-#define ARG(n) (get_user(esp+(n)*4))
+//#define ARG(n) (get_user(esp+(n)*4))
+
 
 static void syscall_handler (struct intr_frame *);
 
@@ -16,7 +17,8 @@ static bool handle_write (int, const void *, unsigned);
 static bool handle_exec (const char *);
 
 
-static int get_user (const void *uaddr);
+static bool get_user (const void *uaddr, int *data);
+static bool get_users (const void *uaddr, int *data, int c);
 static bool put_user (const void *uaddr, uint8_t data); 
 
 void
@@ -31,10 +33,14 @@ syscall_handler (struct intr_frame *f UNUSED)
 
   printf ("system call! : ");
   void *esp = f->esp;
-  int number = get_user(esp);
+  int number, i;
+  int args[5];
+  
+  get_user(esp, &number);
   printf ("%d\n", number);
   //printf("esp=%x\n", esp);
  // hex_dump(PHYS_BASE-200, PHYS_BASE-200, 200, true);
+
 
   switch(number){
     case SYS_EXIT:
@@ -45,10 +51,14 @@ syscall_handler (struct intr_frame *f UNUSED)
       NOT_REACHED();
       break;
     case SYS_WRITE:
-      handle_write(ARG(1), ARG(2), ARG(3));
+      get_users(esp, args, 3);
+     // handle_write(ARG(1), ARG(2), ARG(3));
+      handle_write(args[0], args[1], args[2]);
+
       break;
     case SYS_EXEC:
-      handle_exec(ARG(1));
+      get_users(esp, args, 1);
+      handle_exec(args[0]);
       break;
     case SYS_WAIT:
       break;
@@ -75,12 +85,13 @@ valid_addr (uint32_t *pd, const void *uaddr)
   else return pagedir_get_page(pd, uaddr);
 }
 
+
 static bool
 handle_write (int fd, const void *buffer, unsigned size) {
   if(fd == 1) {
     printf((char *)buffer);
   }else{
-    printf("WRITE(%d): %s", fd, (char *)buffer);
+    printf("WRITE(%d/%d): %s", fd, size, (char *)buffer);
   }
   return true;
 }
@@ -94,17 +105,29 @@ handle_exec (const char *cmd) {
   return tid != -1;
 }
 
-static int
-get_user (const void *uaddr)
+static bool
+get_user (const void *uaddr, int *data)
 {
   uint32_t *pd = thread_current() -> pagedir;
   void *addr = valid_addr(pd, uaddr);
   if(addr){
-    return *((int *)addr);
+    *data = *((int *)addr);
+    return true;
   } else {
     process_exit();
-    return -1;
+    return false;
   }
+}
+
+static bool
+get_users (const void *uaddr, int *data, int c)
+{
+  int i;
+  for(i=1; i<=c; i++){
+    if(!get_user(uaddr+i*4, &data[i-1]))
+      return false;
+  }
+  return true;
 }
 
 static bool
