@@ -33,7 +33,8 @@ syscall_handler (struct intr_frame *f UNUSED)
   void *esp = f->esp;
   int number = get_user(esp);
   printf ("%d\n", number);
-  hex_dump(0, esp, 200, true);
+  //printf("esp=%x\n", esp);
+ // hex_dump(PHYS_BASE-200, PHYS_BASE-200, 200, true);
 
   switch(number){
     case SYS_EXIT:
@@ -64,8 +65,7 @@ syscall_handler (struct intr_frame *f UNUSED)
       break;
   }
 
-
-  thread_exit ();
+ // thread_exit ();
 }
 
 static void *
@@ -79,7 +79,9 @@ static bool
 handle_write (int fd, const void *buffer, unsigned size) {
   if(fd == 1) {
     printf((char *)buffer);
-  ;}
+  }else{
+    printf("WRITE(%d): %s", fd, (char *)buffer);
+  }
   return true;
 }
 

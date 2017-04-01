@@ -30,7 +30,6 @@ process_execute (const char *file_name)
 {
   char *fn_copy;
   tid_t tid;
-  printf("EXEC PROC %s\n", file_name);
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
   fn_copy = palloc_get_page (0);
@@ -62,7 +61,7 @@ start_process (void *f_name)
   success = load (file_name, &if_.eip, &if_.esp);
 
   /* If load failed, quit. */
-  //palloc_free_page (file_name);
+  palloc_free_page (file_name);
   if (!success) 
     thread_exit ();
 
@@ -88,7 +87,8 @@ start_process (void *f_name)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
- // for (;;) ;
+  printf("WAIT");
+  for (;;) ;
   return -1;
 }
 
