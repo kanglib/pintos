@@ -6,6 +6,7 @@
 struct file;
 
 struct process {
+  int file_n;
   struct file **file;
   struct list_elem elem;
 };

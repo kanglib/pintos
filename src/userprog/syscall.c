@@ -11,6 +11,7 @@
 #include "filesys/filesys.h"
 
 //#define ARG(n) (get_user(esp+(n)*4))
+#define GET_ARG(n) get_users(esp, &args, n)
 
 
 static void syscall_handler (struct intr_frame *);
@@ -19,6 +20,9 @@ static bool handle_write (int, const void *, unsigned);
 static bool handle_exec (const char *);
 static bool handle_create (const char *name, unsigned initial_size);
 static bool handle_remove (const char *name);
+static int handle_open (const char *name);
+static int handle_filesize (int fd);
+static void handle_close (int fd);
 
 static bool get_user (const void *uaddr, int *data);
 static bool get_users (const void *uaddr, int **data, int c);
@@ -62,25 +66,32 @@ syscall_handler (struct intr_frame *f UNUSED)
       break;
     case SYS_EXEC:
       get_users(esp, &args, 1);
-      handle_exec(args[0]);
+      f->eax = handle_exec(args[0]);
       break;
     case SYS_WAIT:
 
       break;
     case SYS_CREATE:
       get_users(esp, &args, 2);
-      handle_create(args[0], args[1]);
+      f->eax = handle_create(args[0], args[1]);
       break;
     case SYS_REMOVE:
       get_users(esp, &args, 1);
-      handle_remove(args[0]);
+      f->eax = handle_remove(args[0]);
       break;
     case SYS_OPEN:
+      get_users(esp, &args, 1);
+      f->eax = handle_open(args[0]);
+      break;
     case SYS_FILESIZE:
+      GET_ARG(1);
+      f->eax = handle_filesize(args[0]);
     case SYS_READ:
     case SYS_SEEK:
     case SYS_TELL:
     case SYS_CLOSE:
+      GET_ARG(1);
+      handle_close(args[0]);
       break;
     default:
       break;
@@ -127,6 +138,35 @@ handle_create (const char *name, unsigned initial_size) {
 static bool
 handle_remove (const char *name) {
   return filesys_remove (name);
+}
+
+static int
+handle_open (const char *name) {
+  struct process *proc = thread_current() -> proc;
+  int fd = proc->file_n++;
+  struct file *file = filesys_open(name);
+  if(file) {
+    proc->file[fd] = file;
+    return fd;
+  } else return -1;
+}
+
+static int
+handle_filesize (int fd) {
+  struct file *file = thread_current()->proc->file[fd];
+  if(file){
+    return file_length(file);
+  }else{
+    return -1;
+  }
+}
+
+static void
+handle_close (int fd) {
+  struct file *file = thread_current()->proc->file[fd];
+  if(file){
+    file_close(file);
+  }
 }
 
 static bool
