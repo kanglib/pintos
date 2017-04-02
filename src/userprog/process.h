@@ -3,8 +3,9 @@
 
 #include "threads/thread.h"
 
-struct file;
+typedef int pid_t;
 
+struct file;
 struct process {
   int file_n;
   struct file **file;
