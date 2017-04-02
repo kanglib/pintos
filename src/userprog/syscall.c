@@ -6,7 +6,9 @@
 #include "userprog/pagedir.h"
 #include "threads/vaddr.h"
 #include "threads/init.h"
+#include "threads/malloc.h"
 #include "userprog/process.h"
+#include "filesys/filesys.h"
 
 //#define ARG(n) (get_user(esp+(n)*4))
 
@@ -15,10 +17,11 @@ static void syscall_handler (struct intr_frame *);
 
 static bool handle_write (int, const void *, unsigned);
 static bool handle_exec (const char *);
-
+static bool handle_create (const char *name, unsigned initial_size);
+static bool handle_remove (const char *name);
 
 static bool get_user (const void *uaddr, int *data);
-static bool get_users (const void *uaddr, int *data, int c);
+static bool get_users (const void *uaddr, int **data, int c);
 static bool put_user (const void *uaddr, uint8_t data); 
 
 void
@@ -34,7 +37,7 @@ syscall_handler (struct intr_frame *f UNUSED)
   printf ("system call! : ");
   void *esp = f->esp;
   int number, i;
-  int args[5];
+  int *args = NULL;
   
   get_user(esp, &number);
   printf ("%d\n", number);
@@ -44,26 +47,34 @@ syscall_handler (struct intr_frame *f UNUSED)
 
   switch(number){
     case SYS_EXIT:
-      process_exit();
+     // process_exit();
+      thread_exit();
       break;
     case SYS_HALT:
       power_off();
       NOT_REACHED();
       break;
     case SYS_WRITE:
-      get_users(esp, args, 3);
+      get_users(esp, &args, 3);
      // handle_write(ARG(1), ARG(2), ARG(3));
       handle_write(args[0], args[1], args[2]);
 
       break;
     case SYS_EXEC:
-      get_users(esp, args, 1);
+      get_users(esp, &args, 1);
       handle_exec(args[0]);
       break;
     case SYS_WAIT:
+    
       break;
     case SYS_CREATE:
+      get_users(esp, &args, 2);
+      handle_create(args[0], args[1]);
+      break;
     case SYS_REMOVE:
+      get_users(esp, &args, 1);
+      handle_remove(args[0]);
+      break;
     case SYS_OPEN:
     case SYS_FILESIZE:
     case SYS_READ:
@@ -74,6 +85,9 @@ syscall_handler (struct intr_frame *f UNUSED)
     default:
       break;
   }
+
+  if(args) free(args);
+
 
  // thread_exit ();
 }
@@ -106,6 +120,16 @@ handle_exec (const char *cmd) {
 }
 
 static bool
+handle_create (const char *name, unsigned initial_size) {
+  return filesys_create(name, initial_size);
+}
+
+static bool
+handle_remove (const char *name) {
+  return filesys_remove (name);
+}
+
+static bool
 get_user (const void *uaddr, int *data)
 {
   uint32_t *pd = thread_current() -> pagedir;
@@ -120,11 +144,12 @@ get_user (const void *uaddr, int *data)
 }
 
 static bool
-get_users (const void *uaddr, int *data, int c)
+get_users (const void *uaddr, int **data, int c)
 {
+  *data = malloc(sizeof(int) * c);
   int i;
   for(i=1; i<=c; i++){
-    if(!get_user(uaddr+i*4, &data[i-1]))
+    if(!get_user(uaddr+i*4, &(*data)[i-1]))
       return false;
   }
   return true;
