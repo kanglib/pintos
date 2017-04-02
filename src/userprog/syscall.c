@@ -3,10 +3,10 @@
 #include <syscall-nr.h>
 #include "threads/interrupt.h"
 #include "threads/thread.h"
-#include "userprog/pagedir.h"
-#include "threads/vaddr.h"
 #include "threads/init.h"
 #include "threads/malloc.h"
+#include "threads/vaddr.h"
+#include "userprog/pagedir.h"
 #include "userprog/process.h"
 #include "filesys/filesys.h"
 
@@ -22,7 +22,7 @@ static bool handle_remove (const char *name);
 
 static bool get_user (const void *uaddr, int *data);
 static bool get_users (const void *uaddr, int **data, int c);
-static bool put_user (const void *uaddr, uint8_t data); 
+static bool put_user (const void *uaddr, uint8_t data);
 
 void
 syscall_init (void) 
@@ -38,7 +38,7 @@ syscall_handler (struct intr_frame *f UNUSED)
   void *esp = f->esp;
   int number, i;
   int *args = NULL;
-  
+
   get_user(esp, &number);
   printf ("%d\n", number);
   //printf("esp=%x\n", esp);
@@ -65,7 +65,7 @@ syscall_handler (struct intr_frame *f UNUSED)
       handle_exec(args[0]);
       break;
     case SYS_WAIT:
-    
+
       break;
     case SYS_CREATE:
       get_users(esp, &args, 2);

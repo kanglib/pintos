@@ -17,6 +17,7 @@
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "threads/malloc.h"
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
@@ -222,7 +223,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
   int argc;
   int i;
 
-  if ((argv = palloc_get_page(0)) == NULL)
+  if ((argv = malloc((PGSIZE / 2 + 1) * sizeof(char *))) == NULL)
     goto done;
   if ((s = palloc_get_page(0)) == NULL)
     goto done;
@@ -352,7 +353,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
   /* We arrive here whether the load is successful or not. */
   file_close (file);
   palloc_free_page(s);
-  palloc_free_page(argv);
+  free(argv);
   return success;
 }
 
