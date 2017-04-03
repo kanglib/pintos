@@ -211,7 +211,7 @@ handle_read(int fd, void *buffer, unsigned size)
   if(fd >= proc->file_n || !buffer || !valid_uaddr(buffer) || !valid_uaddr(buffer+size-1)) handle_exit(-1);
 
   if(fd == 0) {
-    int i;
+    unsigned i;
     for(i=0; i<size; i++){
       buf[i] = input_getc();
     }
@@ -236,7 +236,7 @@ handle_write(int fd, const void *buffer, unsigned size)
   if(fd >= proc->file_n || !buffer || !valid_uaddr(buffer) || !valid_uaddr(buffer+size-1)) handle_exit(-1);
 
   if(fd == 1) {
-    return printf("%s", buffer);
+    return printf("%s", (char *)buffer);
   }else{
     file = proc->file[fd];
     if(file){
@@ -251,11 +251,31 @@ handle_write(int fd, const void *buffer, unsigned size)
 static void
 handle_seek(int fd, unsigned position)
 {
+  struct process *proc = thread_current()->proc;
+  struct file *file;
+  if(fd >= proc->file_n)
+    handle_exit(-1);
+  
+  file = proc->file[fd];
+
+  if(file){
+    file_seek(file, position);
+  }else handle_exit(-1);
 }
 
 static unsigned
 handle_tell(int fd)
 {
+  struct process *proc = thread_current()->proc;
+  struct file *file;
+  if(fd >= proc->file_n)
+    handle_exit(-1);
+  
+  file = proc->file[fd];
+
+  if(file){
+    return file_tell(file);
+  }else handle_exit(-1);
   return 0;
 }
 
