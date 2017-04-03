@@ -31,6 +31,9 @@ process_execute (const char *file_name)
 {
   char *fn_copy;
   tid_t tid;
+  struct file *file;
+  char *name;
+  int i, j;
 
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
@@ -39,8 +42,24 @@ process_execute (const char *file_name)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
 
-  /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
+  j = 0;
+  while (file_name[j++] == ' ') ;
+  i = j - 1;
+  while (file_name[j++])
+    if (file_name[j - 1] == ' ')
+      break;
+  name = malloc((j - i + 1) * sizeof(char));
+  strlcpy(name, file_name + i, j - i);
+
+  if ((file = filesys_open(name)) == NULL) {
+    free(name);
+    return TID_ERROR;
+  }
+  file_close(file);
+
+  /* Create a new thread to execute NAME. */
+  tid = thread_create(name, PRI_DEFAULT, start_process, fn_copy);
+  free(name);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
   return tid;
@@ -54,6 +73,7 @@ start_process (void *f_name)
   char *file_name = f_name;
   struct intr_frame if_;
   bool success;
+  struct file *file;
 
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
@@ -61,11 +81,16 @@ start_process (void *f_name)
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (file_name, &if_.eip, &if_.esp);
+  file = thread_current()->proc->exe;
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
-  if (!success) 
+  if (!success) {
+    file_close(file);
     thread_exit ();
+  }
+
+  file_deny_write(file);
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -106,10 +131,6 @@ process_exit (void)
   pd = curr->pagedir;
   if (pd != NULL) 
     {
-      char *line = thread_name();
-      char *name;
-      int i, j=0;
-
       /* Correct ordering here is crucial.  We must set
          cur->pagedir to NULL before switching page directories,
          so that a timer interrupt can't switch back to the
@@ -121,13 +142,8 @@ process_exit (void)
       pagedir_activate (NULL);
       pagedir_destroy (pd);
 
-      while(line[j++]==' ');
-      i = j - 1;
-      while(line[j++]!='\0') if(line[j-1] == ' ') break;
-      name = malloc(sizeof(char)*(j-i+1));
-      strlcpy(name, line+i, j-i);
-      printf("%s: exit(%d)\n", name, curr->proc->status);
-      free(name);
+      file_close(curr->proc->exe);
+      printf("%s: exit(%d)\n", thread_name(), curr->proc->status);
     }
 }
 
@@ -364,7 +380,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
  done:
   /* We arrive here whether the load is successful or not. */
-  file_close (file);
+  thread_current()->proc->exe = file;
   palloc_free_page(s);
   free(argv);
   return success;

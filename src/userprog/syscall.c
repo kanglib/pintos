@@ -13,7 +13,6 @@
 #include "devices/input.h"
 #include "lib/string.h"
 
-
 #define GET_ARG(n) get_users(esp, &args, n)
 
 static void syscall_handler (struct intr_frame *);
@@ -33,11 +32,8 @@ static void handle_close(int fd);
 
 static void *valid_addr (uint32_t *pd, const void *uaddr);
 static void *valid_uaddr (const void *uaddr);
-
-
 static bool get_user (const void *uaddr, int *data);
 static bool get_users (const void *uaddr, int **data, int c);
-static bool put_user (const void *uaddr, uint8_t data);
 
 void
 syscall_init (void) 
@@ -50,11 +46,11 @@ static void syscall_handler(struct intr_frame *f)
   void *esp = f->esp;
   int number;
   int *args = NULL;
-  if(!valid_uaddr(esp)) handle_exit(-1);
 
+  if (!valid_uaddr(esp))
+    handle_exit(-1);
 
   get_user(esp, &number);
-  //printf("system call! : %d\n", number);
   switch (number) {
     case SYS_HALT:
       power_off();
@@ -115,7 +111,7 @@ static void syscall_handler(struct intr_frame *f)
 static void
 handle_exit(int status)
 {
-  thread_current()->proc->status = status; 
+  thread_current()->proc->status = status;
   thread_exit();
 }
 
@@ -125,25 +121,10 @@ handle_exec(const char *cmd)
   tid_t tid;
   if(!cmd || !valid_uaddr(cmd))
     handle_exit(-1);
-  
-  char *name;
-  int i, j=0;
-  while(cmd[j++]==' ');
-  i = j - 1;
-  while(cmd[j++]!='\0') if(cmd[j-1] == ' ') break;
-  name = malloc(sizeof(char)*(j-i+1));
-  strlcpy(name, cmd+i, j-i);
 
-  if(!filesys_open(name)) {
-    free(name);
+  if ((tid = process_execute(cmd)) == TID_ERROR)
     return -1;
-  }
-  
-  free(name);
-  tid = process_execute(cmd);
-
   thread_yield();
-
   return tid;
 }
 
@@ -224,7 +205,7 @@ handle_read(int fd, void *buffer, unsigned size)
       handle_exit(-1);
     }
   }
-  return 0; // NOT REACHED
+  NOT_REACHED();
 }
 
 static int
@@ -245,7 +226,7 @@ handle_write(int fd, const void *buffer, unsigned size)
       handle_exit(-1);
     }
   }
-  return 0; //NOT REACHED
+  NOT_REACHED();
 }
 
 static void
@@ -255,7 +236,7 @@ handle_seek(int fd, unsigned position)
   struct file *file;
   if(fd >= proc->file_n)
     handle_exit(-1);
-  
+
   file = proc->file[fd];
 
   if(file){
@@ -270,7 +251,7 @@ handle_tell(int fd)
   struct file *file;
   if(fd >= proc->file_n)
     handle_exit(-1);
-  
+
   file = proc->file[fd];
 
   if(file){
@@ -286,7 +267,7 @@ handle_close(int fd)
   struct file *file;
   if(fd >= proc->file_n)
     handle_exit(-1);
-  
+
   file = proc->file[fd];
 
   if(file){
@@ -333,16 +314,4 @@ get_users (const void *uaddr, int **data, int c)
       return false;
   }
   return true;
-}
-
-static bool
-put_user (const void *uaddr, uint8_t data) {
-  uint32_t *pd = thread_current() -> pagedir;
-  void *addr = valid_addr(pd, uaddr);
-  if(addr){
-    *((uint8_t *)addr) = data;
-    return true;
-  }else{
-    return false;
-  }
 }

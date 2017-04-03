@@ -7,8 +7,9 @@ typedef int pid_t;
 
 struct file;
 struct process {
-  int file_n;
+  struct file *exe;
   struct file **file;
+  int file_n;
   int status;
   struct list_elem elem;
 };
