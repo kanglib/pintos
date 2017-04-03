@@ -206,6 +206,7 @@ thread_create (const char *name, int priority,
   t->proc = malloc(sizeof(struct process));
   t->proc->file = calloc(128, sizeof(struct file *));
   t->proc->file_n = 2;
+  t->proc->status = -1;
 #endif
 
   /* Add to run queue. */

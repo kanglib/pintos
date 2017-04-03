@@ -10,6 +10,9 @@
 #include "userprog/process.h"
 #include "filesys/file.h"
 #include "filesys/filesys.h"
+#include "devices/input.h"
+#include "lib/string.h"
+
 
 #define GET_ARG(n) get_users(esp, &args, n)
 
@@ -28,6 +31,10 @@ static void handle_seek(int fd, unsigned position);
 static unsigned handle_tell(int fd);
 static void handle_close(int fd);
 
+static void *valid_addr (uint32_t *pd, const void *uaddr);
+static void *valid_uaddr (const void *uaddr);
+
+
 static bool get_user (const void *uaddr, int *data);
 static bool get_users (const void *uaddr, int **data, int c);
 static bool put_user (const void *uaddr, uint8_t data);
@@ -43,9 +50,11 @@ static void syscall_handler(struct intr_frame *f)
   void *esp = f->esp;
   int number;
   int *args = NULL;
+  if(!valid_uaddr(esp)) handle_exit(-1);
+
 
   get_user(esp, &number);
-  printf("system call! : %d\n", number);
+  //printf("system call! : %d\n", number);
   switch (number) {
     case SYS_HALT:
       power_off();
@@ -106,6 +115,7 @@ static void syscall_handler(struct intr_frame *f)
 static void
 handle_exit(int status)
 {
+  thread_current()->proc->status = status; 
   thread_exit();
 }
 
@@ -113,10 +123,28 @@ static pid_t
 handle_exec(const char *cmd)
 {
   tid_t tid;
-  printf("EXEC %s\n", cmd);
+  if(!cmd || !valid_uaddr(cmd))
+    handle_exit(-1);
+  
+  char *name;
+  int i, j=0;
+  while(cmd[j++]==' ');
+  i = j - 1;
+  while(cmd[j++]!='\0') if(cmd[j-1] == ' ') break;
+  name = malloc(sizeof(char)*(j-i+1));
+  strlcpy(name, cmd+i, j-i);
+
+  if(!filesys_open(name)) {
+    free(name);
+    return -1;
+  }
+  
+  free(name);
   tid = process_execute(cmd);
 
-  return tid != -1;
+  thread_yield();
+
+  return tid;
 }
 
 static int
@@ -128,13 +156,17 @@ handle_wait(pid_t pid)
 static bool
 handle_create(const char *file, unsigned initial_size)
 {
-  return filesys_create(file, initial_size);
+  if(file && valid_uaddr(file))
+    return filesys_create(file, initial_size);
+  else handle_exit(-1);
 }
 
 static bool
 handle_remove(const char *file)
 {
-  return filesys_remove(file);
+  if(file && valid_uaddr(file))
+    return filesys_remove(file);
+  else handle_exit(-1);
 }
 
 static int
@@ -142,7 +174,11 @@ handle_open(const char *name)
 {
   struct process *proc = thread_current() -> proc;
   int fd = proc->file_n++;
-  struct file *file = filesys_open(name);
+  struct file *file;
+  if(!name || !valid_uaddr(name))
+    handle_exit(-1);
+
+  file = filesys_open(name);
   if(file) {
     proc->file[fd] = file;
     return fd;
@@ -152,7 +188,12 @@ handle_open(const char *name)
 static int
 handle_filesize(int fd)
 {
-  struct file *file = thread_current()->proc->file[fd];
+  struct process *proc = thread_current()->proc;
+  struct file *file;
+  if(fd >= proc->file_n)
+    handle_exit(-1);
+
+  file = proc->file[fd];
   if(file){
     return file_length(file);
   }else{
@@ -163,18 +204,48 @@ handle_filesize(int fd)
 static int
 handle_read(int fd, void *buffer, unsigned size)
 {
-  return 0;
+  struct process *proc = thread_current()->proc;
+  struct file *file;
+  uint8_t *buf = buffer;
+
+  if(fd >= proc->file_n || !buffer || !valid_uaddr(buffer) || !valid_uaddr(buffer+size-1)) handle_exit(-1);
+
+  if(fd == 0) {
+    int i;
+    for(i=0; i<size; i++){
+      buf[i] = input_getc();
+    }
+    return size;
+  }else{
+    file = proc->file[fd];
+    if(file){
+      return file_read(file, buffer, size);
+    }else{
+      handle_exit(-1);
+    }
+  }
+  return 0; // NOT REACHED
 }
 
 static int
 handle_write(int fd, const void *buffer, unsigned size)
 {
+  struct process *proc = thread_current()->proc;
+  struct file *file;
+
+  if(fd >= proc->file_n || !buffer || !valid_uaddr(buffer) || !valid_uaddr(buffer+size-1)) handle_exit(-1);
+
   if(fd == 1) {
-    printf("%s", buffer);
+    return printf("%s", buffer);
   }else{
-    printf("WRITE(%d/%d): %s", fd, size, (char *)buffer);
+    file = proc->file[fd];
+    if(file){
+      return file_write(file, buffer, size);
+    }else{
+      handle_exit(-1);
+    }
   }
-  return 0;
+  return 0; //NOT REACHED
 }
 
 static void
@@ -191,9 +262,16 @@ handle_tell(int fd)
 static void
 handle_close(int fd)
 {
-  struct file *file = thread_current()->proc->file[fd];
+  struct process *proc = thread_current()->proc;
+  struct file *file;
+  if(fd >= proc->file_n)
+    handle_exit(-1);
+  
+  file = proc->file[fd];
+
   if(file){
     file_close(file);
+    proc->file[fd] = NULL;
   }
 }
 
@@ -202,6 +280,13 @@ valid_addr (uint32_t *pd, const void *uaddr)
 {
   if (!uaddr || uaddr >= PHYS_BASE) return NULL;
   else return pagedir_get_page(pd, uaddr);
+}
+
+static void *
+valid_uaddr (const void *uaddr)
+{
+  uint32_t *pd = thread_current() -> pagedir;
+  return valid_addr(pd, uaddr);
 }
 
 static bool
@@ -213,7 +298,7 @@ get_user (const void *uaddr, int *data)
     *data = *((int *)addr);
     return true;
   } else {
-    process_exit();
+    handle_exit(-1);
     return false;
   }
 }

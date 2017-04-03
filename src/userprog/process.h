@@ -9,6 +9,7 @@ struct file;
 struct process {
   int file_n;
   struct file **file;
+  int status;
   struct list_elem elem;
 };
 
