@@ -17,6 +17,7 @@
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "threads/malloc.h"
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
@@ -88,7 +89,8 @@ start_process (void *f_name)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
-  for (;;) ;
+  int i;
+  for (i=0; i<210000000; i++) ;
   return -1;
 }
 
@@ -104,6 +106,10 @@ process_exit (void)
   pd = curr->pagedir;
   if (pd != NULL) 
     {
+      char *line = thread_name();
+      char *name;
+      int i, j=0;
+
       /* Correct ordering here is crucial.  We must set
          cur->pagedir to NULL before switching page directories,
          so that a timer interrupt can't switch back to the
@@ -114,6 +120,14 @@ process_exit (void)
       curr->pagedir = NULL;
       pagedir_activate (NULL);
       pagedir_destroy (pd);
+
+      while(line[j++]==' ');
+      i = j - 1;
+      while(line[j++]!='\0') if(line[j-1] == ' ') break;
+      name = malloc(sizeof(char)*(j-i+1));
+      strlcpy(name, line+i, j-i);
+      printf("%s: exit(%d)\n", name, curr->proc->status);
+      free(name);
     }
 }
 
@@ -222,7 +236,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
   int argc;
   int i;
 
-  if ((argv = palloc_get_page(0)) == NULL)
+  if ((argv = malloc((PGSIZE / 2 + 1) * sizeof(char *))) == NULL)
     goto done;
   if ((s = palloc_get_page(0)) == NULL)
     goto done;
@@ -352,7 +366,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
   /* We arrive here whether the load is successful or not. */
   file_close (file);
   palloc_free_page(s);
-  palloc_free_page(argv);
+  free(argv);
   return success;
 }
 

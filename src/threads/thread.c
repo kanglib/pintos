@@ -11,7 +11,9 @@
 #include "threads/switch.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
+
 #ifdef USERPROG
+#include "threads/malloc.h"
 #include "userprog/process.h"
 #endif
 
@@ -198,6 +200,14 @@ thread_create (const char *name, int priority,
   /* Stack frame for switch_threads(). */
   sf = alloc_frame (t, sizeof *sf);
   sf->eip = switch_entry;
+
+#ifdef USERPROG
+  /* Create user process. */
+  t->proc = malloc(sizeof(struct process));
+  t->proc->file = calloc(128, sizeof(struct file *));
+  t->proc->file_n = 2;
+  t->proc->status = -1;
+#endif
 
   /* Add to run queue. */
   thread_unblock (t);
