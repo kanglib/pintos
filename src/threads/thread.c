@@ -11,10 +11,9 @@
 #include "threads/switch.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
-
 #ifdef USERPROG
-#include "threads/malloc.h"
 #include "userprog/process.h"
+#include "threads/malloc.h"
 #endif
 
 /* Random value for struct thread's `magic' member.
@@ -186,6 +185,10 @@ thread_create (const char *name, int priority,
   /* Initialize thread. */
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
+#ifdef USERPROG
+  t->pid = tid;
+  t->file = calloc(128, sizeof(struct file *));
+#endif
 
   /* Stack frame for kernel_thread(). */
   kf = alloc_frame (t, sizeof *kf);
@@ -200,14 +203,6 @@ thread_create (const char *name, int priority,
   /* Stack frame for switch_threads(). */
   sf = alloc_frame (t, sizeof *sf);
   sf->eip = switch_entry;
-
-#ifdef USERPROG
-  /* Create user process. */
-  t->proc = malloc(sizeof(struct process));
-  t->proc->file = calloc(128, sizeof(struct file *));
-  t->proc->file_n = 2;
-  t->proc->status = -1;
-#endif
 
   /* Add to run queue. */
   thread_unblock (t);
@@ -389,6 +384,18 @@ struct thread *thread_get_highest(struct list *list)
   list_remove(e);
   return list_entry(e, struct thread, elem);
 }
+
+struct thread *thread_get_by_tid(tid_t tid)
+{
+  struct list_elem *e;
+  for (e = list_begin(&ready_list); e != list_end(&ready_list);
+      e = list_next(e)) {
+    struct thread *t = list_entry(e, struct thread, elem);
+    if (t->tid == tid)
+      return t;
+  }
+  NOT_REACHED();
+}
 
 /* Idle thread.  Executes when no other thread is ready to run.
 
@@ -478,6 +485,12 @@ init_thread (struct thread *t, const char *name, int priority)
   list_init(&t->donation_list);
   t->deferred_priority = priority;
   t->magic = THREAD_MAGIC;
+
+#ifdef USERPROG
+  t->file_n = 2;
+  t->exit_code = -1;
+  list_init(&t->child_list);
+#endif
 }
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and

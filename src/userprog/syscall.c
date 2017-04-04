@@ -12,6 +12,7 @@
 #include "filesys/filesys.h"
 #include "devices/input.h"
 #include "lib/string.h"
+#include "lib/kernel/list.h"
 
 #define GET_ARG(n) get_users(esp, &args, n)
 
@@ -111,7 +112,7 @@ static void syscall_handler(struct intr_frame *f)
 static void
 handle_exit(int status)
 {
-  thread_current()->proc->status = status;
+  thread_current()->exit_code = status;
   thread_exit();
 }
 
@@ -131,7 +132,7 @@ handle_exec(const char *cmd)
 static int
 handle_wait(pid_t pid)
 {
-  return 0;
+  return process_wait(pid);
 }
 
 static bool
@@ -151,17 +152,17 @@ handle_remove(const char *file)
 }
 
 static int
-handle_open(const char *name)
+handle_open(const char *file)
 {
-  struct process *proc = thread_current() -> proc;
-  int fd = proc->file_n++;
-  struct file *file;
-  if(!name || !valid_uaddr(name))
+  struct thread *t = thread_current();
+  int fd = t->file_n++;
+  struct file *f;
+  if (!file || !valid_uaddr(file))
     handle_exit(-1);
 
-  file = filesys_open(name);
-  if(file) {
-    proc->file[fd] = file;
+  f = filesys_open(file);
+  if (f) {
+    t->file[fd] = f;
     return fd;
   } else return -1;
 }
@@ -169,12 +170,12 @@ handle_open(const char *name)
 static int
 handle_filesize(int fd)
 {
-  struct process *proc = thread_current()->proc;
+  struct thread *t = thread_current();
   struct file *file;
-  if(fd >= proc->file_n)
+  if(fd >= t->file_n)
     handle_exit(-1);
 
-  file = proc->file[fd];
+  file = t->file[fd];
   if(file){
     return file_length(file);
   }else{
@@ -185,11 +186,13 @@ handle_filesize(int fd)
 static int
 handle_read(int fd, void *buffer, unsigned size)
 {
-  struct process *proc = thread_current()->proc;
+  struct thread *t = thread_current();
   struct file *file;
   uint8_t *buf = buffer;
 
-  if(fd >= proc->file_n || !buffer || !valid_uaddr(buffer) || !valid_uaddr(buffer+size-1)) handle_exit(-1);
+  if (fd >= t->file_n || !buffer || !valid_uaddr(buffer)
+      || !valid_uaddr(buffer + size - 1))
+    handle_exit(-1);
 
   if(fd == 0) {
     unsigned i;
@@ -198,7 +201,7 @@ handle_read(int fd, void *buffer, unsigned size)
     }
     return size;
   }else{
-    file = proc->file[fd];
+    file = t->file[fd];
     if(file){
       return file_read(file, buffer, size);
     }else{
@@ -211,15 +214,17 @@ handle_read(int fd, void *buffer, unsigned size)
 static int
 handle_write(int fd, const void *buffer, unsigned size)
 {
-  struct process *proc = thread_current()->proc;
+  struct thread *t = thread_current();
   struct file *file;
 
-  if(fd >= proc->file_n || !buffer || !valid_uaddr(buffer) || !valid_uaddr(buffer+size-1)) handle_exit(-1);
+  if (fd >= t->file_n || !buffer || !valid_uaddr(buffer)
+      || !valid_uaddr(buffer + size - 1))
+    handle_exit(-1);
 
   if(fd == 1) {
     return printf("%s", (char *)buffer);
   }else{
-    file = proc->file[fd];
+    file = t->file[fd];
     if(file){
       return file_write(file, buffer, size);
     }else{
@@ -232,12 +237,12 @@ handle_write(int fd, const void *buffer, unsigned size)
 static void
 handle_seek(int fd, unsigned position)
 {
-  struct process *proc = thread_current()->proc;
+  struct thread *t = thread_current();
   struct file *file;
-  if(fd >= proc->file_n)
+  if (fd >= t->file_n)
     handle_exit(-1);
 
-  file = proc->file[fd];
+  file = t->file[fd];
 
   if(file){
     file_seek(file, position);
@@ -247,12 +252,12 @@ handle_seek(int fd, unsigned position)
 static unsigned
 handle_tell(int fd)
 {
-  struct process *proc = thread_current()->proc;
+  struct thread *t = thread_current();
   struct file *file;
-  if(fd >= proc->file_n)
+  if (fd >= t->file_n)
     handle_exit(-1);
 
-  file = proc->file[fd];
+  file = t->file[fd];
 
   if(file){
     return file_tell(file);
@@ -263,16 +268,16 @@ handle_tell(int fd)
 static void
 handle_close(int fd)
 {
-  struct process *proc = thread_current()->proc;
+  struct thread *t = thread_current();
   struct file *file;
-  if(fd >= proc->file_n)
+  if (fd >= t->file_n)
     handle_exit(-1);
 
-  file = proc->file[fd];
+  file = t->file[fd];
 
   if(file){
     file_close(file);
-    proc->file[fd] = NULL;
+    t->file[fd] = NULL;
   }
 }
 

@@ -4,6 +4,7 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
+#include "threads/synch.h"
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -18,6 +19,11 @@ enum thread_status
    You can redefine this to whatever type you like. */
 typedef int tid_t;
 #define TID_ERROR ((tid_t) -1)          /* Error value for tid_t. */
+
+#ifdef USERPROG
+/* Process identifier type. */
+typedef int pid_t;
+#endif
 
 /* Thread priorities. */
 #define PRI_MIN 0                       /* Lowest priority. */
@@ -34,6 +40,16 @@ struct donation {
   int lp;                               /* Lower (original) priority. */
   struct list_elem elem;                /* List element of donation_list. */
 };
+
+#ifdef USERPROG
+/* Child process information. */
+struct child {
+  tid_t tid;
+  int status;
+  struct semaphore sema;
+  struct list_elem elem;
+};
+#endif
 
 /* A kernel thread or user process.
 
@@ -115,7 +131,13 @@ struct thread
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
-    struct process *proc;               /* User process information. */
+    pid_t pid;
+    struct file *exe;
+    struct file **file;
+    int file_n;
+    int exit_code;
+    struct thread *parent;
+    struct list child_list;
 #endif
 
     /* Owned by thread.c. */
@@ -155,5 +177,6 @@ int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
 struct thread *thread_get_highest(struct list *list);
+struct thread *thread_get_by_tid(tid_t tid);
 
 #endif /* threads/thread.h */

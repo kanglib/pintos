@@ -32,6 +32,8 @@ process_execute (const char *file_name)
   char *fn_copy;
   tid_t tid;
   struct file *file;
+  struct thread *t;
+  struct child *c;
   char *name;
   int i, j;
 
@@ -60,8 +62,19 @@ process_execute (const char *file_name)
   /* Create a new thread to execute NAME. */
   tid = thread_create(name, PRI_DEFAULT, start_process, fn_copy);
   free(name);
-  if (tid == TID_ERROR)
-    palloc_free_page (fn_copy); 
+  if (tid == TID_ERROR) {
+    palloc_free_page(fn_copy);
+    return TID_ERROR;
+  }
+
+  t = thread_get_by_tid(tid);
+  t->parent = thread_current();
+
+  c = malloc(sizeof(struct child));
+  c->tid = tid;
+  c->status = -1;
+  sema_init(&c->sema, 0);
+  list_push_back(&thread_current()->child_list, &c->elem);
   return tid;
 }
 
@@ -81,7 +94,7 @@ start_process (void *f_name)
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (file_name, &if_.eip, &if_.esp);
-  file = thread_current()->proc->exe;
+  file = thread_current()->exe;
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
@@ -114,8 +127,21 @@ start_process (void *f_name)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
-  int i;
-  for (i=0; i<210000000; i++) ;
+  struct list *list;
+  struct list_elem *e;
+
+  list = &thread_current()->child_list;
+  for (e = list_begin(list); e != list_end(list); e = list_next(e)) {
+    struct child *c = list_entry(e, struct child, elem);
+    if (c->tid == child_tid) {
+      int status;
+      sema_down(&c->sema);
+      status = c->status;
+      list_remove(e);
+      free(c);
+      return status;
+    }
+  }
   return -1;
 }
 
@@ -131,6 +157,20 @@ process_exit (void)
   pd = curr->pagedir;
   if (pd != NULL) 
     {
+      struct list *list;
+      struct list_elem *e;
+
+      list = &curr->parent->child_list;
+      for (e = list_begin(list); e != list_end(list); e = list_next(e)) {
+        struct child *c = list_entry(e, struct child, elem);
+        if (c->tid == curr->tid) {
+          c->status = curr->exit_code;
+          sema_up(&c->sema);
+        }
+      }
+
+      /* free childs */
+
       /* Correct ordering here is crucial.  We must set
          cur->pagedir to NULL before switching page directories,
          so that a timer interrupt can't switch back to the
@@ -142,8 +182,8 @@ process_exit (void)
       pagedir_activate (NULL);
       pagedir_destroy (pd);
 
-      file_close(curr->proc->exe);
-      printf("%s: exit(%d)\n", thread_name(), curr->proc->status);
+      file_close(curr->exe);
+      printf("%s: exit(%d)\n", thread_name(), curr->exit_code);
     }
 }
 
@@ -380,7 +420,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
  done:
   /* We arrive here whether the load is successful or not. */
-  thread_current()->proc->exe = file;
+  thread_current()->exe = file;
   palloc_free_page(s);
   free(argv);
   return success;

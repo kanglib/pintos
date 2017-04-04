@@ -3,17 +3,6 @@
 
 #include "threads/thread.h"
 
-typedef int pid_t;
-
-struct file;
-struct process {
-  struct file *exe;
-  struct file **file;
-  int file_n;
-  int status;
-  struct list_elem elem;
-};
-
 tid_t process_execute (const char *file_name);
 int process_wait (tid_t);
 void process_exit (void);
