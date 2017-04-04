@@ -55,6 +55,7 @@ process_execute (const char *file_name)
 
   if ((file = filesys_open(name)) == NULL) {
     free(name);
+    palloc_free_page(fn_copy);
     return TID_ERROR;
   }
   file_close(file);
@@ -125,7 +126,7 @@ start_process (void *f_name)
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
 int
-process_wait (tid_t child_tid UNUSED) 
+process_wait(tid_t child_tid) 
 {
   struct list *list;
   struct list_elem *e;
@@ -136,8 +137,8 @@ process_wait (tid_t child_tid UNUSED)
     if (c->tid == child_tid) {
       int status;
       sema_down(&c->sema);
-      status = c->status;
       list_remove(e);
+      status = c->status;
       free(c);
       return status;
     }
@@ -160,6 +161,13 @@ process_exit (void)
       struct list *list;
       struct list_elem *e;
 
+      list = &curr->child_list;
+      for (e = list_begin(list); e != list_end(list); e = list_next(e)) {
+        struct child *c = list_entry(e, struct child, elem);
+        list_remove(e);
+        free(c);
+      }
+
       list = &curr->parent->child_list;
       for (e = list_begin(list); e != list_end(list); e = list_next(e)) {
         struct child *c = list_entry(e, struct child, elem);
@@ -168,8 +176,6 @@ process_exit (void)
           sema_up(&c->sema);
         }
       }
-
-      /* free childs */
 
       /* Correct ordering here is crucial.  We must set
          cur->pagedir to NULL before switching page directories,
