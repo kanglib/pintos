@@ -160,6 +160,10 @@ process_exit (void)
     {
       struct list *list;
       struct list_elem *e;
+      int i;
+
+      for (i = 2; i < curr->file_n; i++)
+        file_close(curr->file[i]);
 
       list = &curr->child_list;
       for (e = list_begin(list); e != list_end(list); e = list_next(e)) {

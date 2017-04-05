@@ -291,8 +291,8 @@ thread_exit (void)
   ASSERT (!intr_context ());
 
 #ifdef USERPROG
-  free(thread_current()->file);
   process_exit ();
+  free(thread_current()->file);
 #endif
 
   /* Just set our status to dying and schedule another process.
