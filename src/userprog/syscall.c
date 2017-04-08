@@ -5,6 +5,7 @@
 #include "threads/thread.h"
 #include "threads/init.h"
 #include "threads/malloc.h"
+#include "threads/synch.h"
 #include "threads/vaddr.h"
 #include "userprog/pagedir.h"
 #include "userprog/process.h"
@@ -36,9 +37,12 @@ static void *valid_uaddr (const void *uaddr);
 static bool get_user (const void *uaddr, int *data);
 static bool get_users (const void *uaddr, int **data, int c);
 
+struct lock fs_lock;
+
 void
 syscall_init (void) 
 {
+  lock_init(&fs_lock);
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
 }
 
@@ -138,17 +142,29 @@ handle_wait(pid_t pid)
 static bool
 handle_create(const char *file, unsigned initial_size)
 {
-  if(file && valid_uaddr(file))
-    return filesys_create(file, initial_size);
-  else handle_exit(-1);
+  if (file && valid_uaddr(file)) {
+    bool success;
+    lock_acquire(&fs_lock);
+    success = filesys_create(file, initial_size);
+    lock_release(&fs_lock);
+    return success;
+  } else {
+    handle_exit(-1);
+  }
 }
 
 static bool
 handle_remove(const char *file)
 {
-  if(file && valid_uaddr(file))
-    return filesys_remove(file);
-  else handle_exit(-1);
+  if (file && valid_uaddr(file)) {
+    bool success;
+    lock_acquire(&fs_lock);
+    success = filesys_remove(file);
+    lock_release(&fs_lock);
+    return success;
+  } else {
+    handle_exit(-1);
+  }
 }
 
 static int
@@ -160,7 +176,9 @@ handle_open(const char *file)
   if (!file || !valid_uaddr(file))
     handle_exit(-1);
 
+  lock_acquire(&fs_lock);
   f = filesys_open(file);
+  lock_release(&fs_lock);
   if (f) {
     t->file[fd] = f;
     return fd;
@@ -177,7 +195,11 @@ handle_filesize(int fd)
 
   file = t->file[fd];
   if(file){
-    return file_length(file);
+    off_t off;
+    lock_acquire(&fs_lock);
+    off = file_length(file);
+    lock_release(&fs_lock);
+    return off;
   }else{
     return -1;
   }
@@ -203,7 +225,11 @@ handle_read(int fd, void *buffer, unsigned size)
   }else{
     file = t->file[fd];
     if(file){
-      return file_read(file, buffer, size);
+      off_t off;
+      lock_acquire(&fs_lock);
+      off = file_read(file, buffer, size);
+      lock_release(&fs_lock);
+      return off;
     }else{
       handle_exit(-1);
     }
@@ -226,7 +252,11 @@ handle_write(int fd, const void *buffer, unsigned size)
   }else{
     file = t->file[fd];
     if(file){
-      return file_write(file, buffer, size);
+      off_t off;
+      lock_acquire(&fs_lock);
+      off = file_write(file, buffer, size);
+      lock_release(&fs_lock);
+      return off;
     }else{
       handle_exit(-1);
     }
@@ -245,7 +275,9 @@ handle_seek(int fd, unsigned position)
   file = t->file[fd];
 
   if(file){
+    lock_acquire(&fs_lock);
     file_seek(file, position);
+    lock_release(&fs_lock);
   }else handle_exit(-1);
 }
 
@@ -260,7 +292,11 @@ handle_tell(int fd)
   file = t->file[fd];
 
   if(file){
-    return file_tell(file);
+    off_t off;
+    lock_acquire(&fs_lock);
+    off = file_tell(file);
+    lock_release(&fs_lock);
+    return off;
   }else handle_exit(-1);
   return 0;
 }
@@ -276,7 +312,9 @@ handle_close(int fd)
   file = t->file[fd];
 
   if(file){
+    lock_acquire(&fs_lock);
     file_close(file);
+    lock_release(&fs_lock);
     t->file[fd] = NULL;
   }
 }

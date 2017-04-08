@@ -186,7 +186,7 @@ thread_create (const char *name, int priority,
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
 #ifdef USERPROG
-  t->file = calloc(128, sizeof(struct file *));
+  t->file = calloc(256, sizeof(struct file *));
 #endif
 
   /* Stack frame for kernel_thread(). */

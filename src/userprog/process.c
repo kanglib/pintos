@@ -22,6 +22,8 @@
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 
+extern struct lock fs_lock;
+
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
    before process_execute() returns.  Returns the new process's
@@ -50,15 +52,18 @@ process_execute (const char *file_name)
   while (file_name[j++])
     if (file_name[j - 1] == ' ')
       break;
-  name = malloc((j - i + 1) * sizeof(char));
+  name = malloc((j - i) * sizeof(char));
   strlcpy(name, file_name + i, j - i);
 
+  lock_acquire(&fs_lock);
   if ((file = filesys_open(name)) == NULL) {
+    lock_release(&fs_lock);
     free(name);
     palloc_free_page(fn_copy);
     return TID_ERROR;
   }
   file_close(file);
+  lock_release(&fs_lock);
 
   /* Create a new thread to execute NAME. */
   tid = thread_create(name, PRI_DEFAULT, start_process, fn_copy);
@@ -94,6 +99,7 @@ start_process (void *f_name)
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
+  lock_acquire(&fs_lock);
   success = load (file_name, &if_.eip, &if_.esp);
   file = thread_current()->exe;
 
@@ -101,10 +107,12 @@ start_process (void *f_name)
   palloc_free_page (file_name);
   if (!success) {
     file_close(file);
+    lock_release(&fs_lock);
     thread_exit ();
   }
 
   file_deny_write(file);
+  lock_release(&fs_lock);
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -162,8 +170,10 @@ process_exit (void)
       struct list_elem *e;
       int i;
 
+      lock_acquire(&fs_lock);
       for (i = 2; i < curr->file_n; i++)
         file_close(curr->file[i]);
+      lock_release(&fs_lock);
 
       list = &curr->child_list;
       for (e = list_begin(list); e != list_end(list); e = list_next(e)) {
@@ -192,7 +202,9 @@ process_exit (void)
       pagedir_activate (NULL);
       pagedir_destroy (pd);
 
+      lock_acquire(&fs_lock);
       file_close(curr->exe);
+      lock_release(&fs_lock);
       printf("%s: exit(%d)\n", thread_name(), curr->exit_code);
     }
 }
