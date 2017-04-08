@@ -20,11 +20,6 @@ enum thread_status
 typedef int tid_t;
 #define TID_ERROR ((tid_t) -1)          /* Error value for tid_t. */
 
-#ifdef USERPROG
-/* Process identifier type. */
-typedef int pid_t;
-#endif
-
 /* Thread priorities. */
 #define PRI_MIN 0                       /* Lowest priority. */
 #define PRI_DEFAULT 31                  /* Default priority. */
@@ -131,7 +126,6 @@ struct thread
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
-    pid_t pid;
     struct file *exe;
     struct file **file;
     int file_n;

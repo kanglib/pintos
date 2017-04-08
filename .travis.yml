@@ -8,4 +8,4 @@ before_install:
   - docker pull kanglib/pintos-kaist-qemu
 
 script:
-  - docker run -v $TRAVIS_BUILD_DIR:/pintos kanglib/pintos-kaist-qemu /bin/bash -c "export PATH=$PATH:/pintos/src/utils && cd /pintos/src/$TARGET_DIRECTORY && make grade" > temp && rm temp && cat src/$TARGET_DIRECTORY/build/grade
+  - docker run -v $TRAVIS_BUILD_DIR:/pintos kanglib/pintos-kaist-qemu sh -c "make -C src/$TARGET_DIRECTORY grade" && cat src/$TARGET_DIRECTORY/build/grade
