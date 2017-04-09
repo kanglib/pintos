@@ -130,6 +130,9 @@ struct thread
     struct file **file;
     int file_n;
     int exit_code;
+    bool is_failed;
+    struct semaphore sema1;
+    struct semaphore sema2;
     struct thread *parent;
     struct list child_list;
 #endif

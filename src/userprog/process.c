@@ -74,6 +74,12 @@ process_execute (const char *file_name)
   }
 
   t = thread_get_by_tid(tid);
+  sema_down(&t->sema1);
+  if (t->is_failed) {
+    sema_up(&t->sema2);
+    return TID_ERROR;
+  }
+  sema_up(&t->sema2);
   t->parent = thread_current();
 
   c = malloc(sizeof(struct child));
@@ -92,7 +98,7 @@ start_process (void *f_name)
   char *file_name = f_name;
   struct intr_frame if_;
   bool success;
-  struct file *file;
+  struct thread *t;
 
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
@@ -101,17 +107,21 @@ start_process (void *f_name)
   if_.eflags = FLAG_IF | FLAG_MBS;
   lock_acquire(&fs_lock);
   success = load (file_name, &if_.eip, &if_.esp);
-  file = thread_current()->exe;
+  t = thread_current();
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
   if (!success) {
-    file_close(file);
     lock_release(&fs_lock);
+    t->is_failed = true;
+    sema_up(&t->sema1);
+    sema_down(&t->sema2);
     thread_exit ();
   }
 
-  file_deny_write(file);
+  sema_up(&t->sema1);
+  sema_down(&t->sema2);
+  file_deny_write(t->exe);
   lock_release(&fs_lock);
 
   /* Start the user process by simulating a return from an
@@ -145,8 +155,8 @@ process_wait(tid_t child_tid)
     if (c->tid == child_tid) {
       int status;
       sema_down(&c->sema);
-      list_remove(e);
       status = c->status;
+      list_remove(e);
       free(c);
       return status;
     }
@@ -182,12 +192,15 @@ process_exit (void)
         free(c);
       }
 
-      list = &curr->parent->child_list;
-      for (e = list_begin(list); e != list_end(list); e = list_next(e)) {
-        struct child *c = list_entry(e, struct child, elem);
-        if (c->tid == curr->tid) {
-          c->status = curr->exit_code;
-          sema_up(&c->sema);
+      if (curr->parent) {
+        list = &curr->parent->child_list;
+        for (e = list_begin(list); e != list_end(list); e = list_next(e)) {
+          struct child *c = list_entry(e, struct child, elem);
+          if (c->tid == curr->tid) {
+            c->status = curr->exit_code;
+            sema_up(&c->sema);
+            break;
+          }
         }
       }
 

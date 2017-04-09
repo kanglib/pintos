@@ -187,6 +187,8 @@ thread_create (const char *name, int priority,
   tid = t->tid = allocate_tid ();
 #ifdef USERPROG
   t->file = calloc(256, sizeof(struct file *));
+  sema_init(&t->sema1, 0);
+  sema_init(&t->sema2, 0);
 #endif
 
   /* Stack frame for kernel_thread(). */
