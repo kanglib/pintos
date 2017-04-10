@@ -37,7 +37,7 @@ process_execute (const char *file_name)
   struct thread *t;
   struct child *c;
   char *name;
-  int i, j;
+  char *save_ptr;
 
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
@@ -46,19 +46,16 @@ process_execute (const char *file_name)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
 
-  j = 0;
-  while (file_name[j++] == ' ') ;
-  i = j - 1;
-  while (file_name[j++])
-    if (file_name[j - 1] == ' ')
-      break;
-  name = malloc((j - i) * sizeof(char));
-  strlcpy(name, file_name + i, j - i);
+  if ((name = palloc_get_page(0)) == NULL) {
+    palloc_free_page(fn_copy);
+    return TID_ERROR;
+  }
+  strlcpy(name, file_name, PGSIZE);
 
   lock_acquire(&fs_lock);
-  if ((file = filesys_open(name)) == NULL) {
+  if ((file = filesys_open(strtok_r(name, " ", &save_ptr))) == NULL) {
     lock_release(&fs_lock);
-    free(name);
+    palloc_free_page(name);
     palloc_free_page(fn_copy);
     return TID_ERROR;
   }
@@ -67,7 +64,7 @@ process_execute (const char *file_name)
 
   /* Create a new thread to execute NAME. */
   tid = thread_create(name, PRI_DEFAULT, start_process, fn_copy);
-  free(name);
+  palloc_free_page(name);
   if (tid == TID_ERROR) {
     palloc_free_page(fn_copy);
     return TID_ERROR;

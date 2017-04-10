@@ -37,12 +37,13 @@ struct donation {
 };
 
 #ifdef USERPROG
-/* Child process information. */
+/* Child process information.
+   Used in thread structures. */
 struct child {
-  tid_t tid;
-  int status;
-  struct semaphore sema;
-  struct list_elem elem;
+  tid_t tid;                            /* Thread identifier. */
+  int status;                           /* Exit status. */
+  struct semaphore sema;                /* Synchronization. */
+  struct list_elem elem;                /* List element. */
 };
 #endif
 
@@ -126,15 +127,16 @@ struct thread
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
-    struct file *exe;
-    struct file **file;
-    int file_n;
-    int exit_code;
-    bool is_failed;
-    struct semaphore sema1;
-    struct semaphore sema2;
-    struct thread *parent;
-    struct list child_list;
+    struct file *exe;                   /* Handle of executable. */
+    struct file **file;                 /* File descriptor mappings. */
+    int file_n;                         /* Maximum used fds. */
+    int file_alloc_n;                   /* Maximum allocated fds. */
+    int exit_code;                      /* Exit status. */
+    bool is_failed;                     /* Flag used for process_execute(). */
+    struct semaphore sema1;             /* Synchronization. */
+    struct semaphore sema2;             /* Synchronization. */
+    struct thread *parent;              /* Parent process. */
+    struct list child_list;             /* Child process information. */
 #endif
 
     /* Owned by thread.c. */

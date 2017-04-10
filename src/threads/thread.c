@@ -186,7 +186,10 @@ thread_create (const char *name, int priority,
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
 #ifdef USERPROG
-  t->file = calloc(256, sizeof(struct file *));
+  t->file = calloc(128, sizeof(struct file *));
+  t->file_n = 2;
+  t->file_alloc_n = 128;
+  t->exit_code = -1;
   sema_init(&t->sema1, 0);
   sema_init(&t->sema2, 0);
 #endif
@@ -487,10 +490,7 @@ init_thread (struct thread *t, const char *name, int priority)
   list_init(&t->donation_list);
   t->deferred_priority = priority;
   t->magic = THREAD_MAGIC;
-
 #ifdef USERPROG
-  t->file_n = 2;
-  t->exit_code = -1;
   list_init(&t->child_list);
 #endif
 }

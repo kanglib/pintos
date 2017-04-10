@@ -37,6 +37,7 @@ static void *valid_uaddr (const void *uaddr);
 static bool get_user (const void *uaddr, int *data);
 static bool get_users (const void *uaddr, int **data, int c);
 
+/* External lock for base file system. */
 struct lock fs_lock;
 
 void
@@ -170,9 +171,8 @@ handle_remove(const char *file)
 static int
 handle_open(const char *file)
 {
-  struct thread *t = thread_current();
-  int fd = t->file_n++;
   struct file *f;
+
   if (!file || !valid_uaddr(file))
     handle_exit(-1);
 
@@ -180,9 +180,17 @@ handle_open(const char *file)
   f = filesys_open(file);
   lock_release(&fs_lock);
   if (f) {
+    struct thread *t = thread_current();
+    int fd = t->file_n++;
+    if (fd >= t->file_alloc_n) {
+      t->file_alloc_n *= 2;
+      t->file = realloc(t->file, t->file_alloc_n);
+    }
     t->file[fd] = f;
     return fd;
-  } else return -1;
+  } else {
+    return -1;
+  }
 }
 
 static int
