@@ -33,10 +33,10 @@ process_execute (const char *file_name)
 {
   char *fn_copy;
   tid_t tid;
-  struct file *file;
   struct thread *t;
   struct child *c;
   char *name;
+  char *name2;
   char *save_ptr;
 
   /* Make a copy of FILE_NAME.
@@ -51,19 +51,10 @@ process_execute (const char *file_name)
     return TID_ERROR;
   }
   strlcpy(name, file_name, PGSIZE);
+  name2 = strtok_r(name, " ", &save_ptr);
 
-  lock_acquire(&fs_lock);
-  if ((file = filesys_open(strtok_r(name, " ", &save_ptr))) == NULL) {
-    lock_release(&fs_lock);
-    palloc_free_page(name);
-    palloc_free_page(fn_copy);
-    return TID_ERROR;
-  }
-  file_close(file);
-  lock_release(&fs_lock);
-
-  /* Create a new thread to execute NAME. */
-  tid = thread_create(name, PRI_DEFAULT, start_process, fn_copy);
+  /* Create a new thread to execute FILE_NAME. */
+  tid = thread_create(name2, PRI_DEFAULT, start_process, fn_copy);
   palloc_free_page(name);
   if (tid == TID_ERROR) {
     palloc_free_page(fn_copy);
@@ -76,7 +67,6 @@ process_execute (const char *file_name)
     sema_up(&t->sema2);
     return TID_ERROR;
   }
-  sema_up(&t->sema2);
   t->parent = thread_current();
 
   c = malloc(sizeof(struct child));
@@ -84,6 +74,8 @@ process_execute (const char *file_name)
   c->status = -1;
   sema_init(&c->sema, 0);
   list_push_back(&thread_current()->child_list, &c->elem);
+
+  sema_up(&t->sema2);
   return tid;
 }
 
@@ -116,10 +108,10 @@ start_process (void *f_name)
     thread_exit ();
   }
 
-  sema_up(&t->sema1);
-  sema_down(&t->sema2);
   file_deny_write(t->exe);
   lock_release(&fs_lock);
+  sema_up(&t->sema1);
+  sema_down(&t->sema2);
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -177,7 +169,9 @@ process_exit (void)
       struct list_elem *e;
       int i;
 
+      printf("%s: exit(%d)\n", thread_name(), curr->exit_code);
       lock_acquire(&fs_lock);
+      file_close(curr->exe);
       for (i = 2; i < curr->file_n; i++)
         file_close(curr->file[i]);
       lock_release(&fs_lock);
@@ -185,6 +179,7 @@ process_exit (void)
       list = &curr->child_list;
       for (e = list_begin(list); e != list_end(list); e = list_next(e)) {
         struct child *c = list_entry(e, struct child, elem);
+        thread_get_by_tid(c->tid)->parent = NULL;
         list_remove(e);
         free(c);
       }
@@ -211,11 +206,6 @@ process_exit (void)
       curr->pagedir = NULL;
       pagedir_activate (NULL);
       pagedir_destroy (pd);
-
-      lock_acquire(&fs_lock);
-      file_close(curr->exe);
-      lock_release(&fs_lock);
-      printf("%s: exit(%d)\n", thread_name(), curr->exit_code);
     }
 }
 

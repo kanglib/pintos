@@ -29,6 +29,9 @@
    that are ready to run but not actually running. */
 static struct list ready_list;
 
+/* List of all processes. */
+static struct list all_list;
+
 /* Idle thread. */
 static struct thread *idle_thread;
 
@@ -95,6 +98,7 @@ thread_init (void)
 
   lock_init (&tid_lock);
   list_init (&ready_list);
+  list_init(&all_list);
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
@@ -185,6 +189,7 @@ thread_create (const char *name, int priority,
   /* Initialize thread. */
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
+  list_push_front(&all_list, &t->all_elem);
 #ifdef USERPROG
   t->file = calloc(128, sizeof(struct file *));
   t->file_n = 2;
@@ -294,6 +299,7 @@ thread_exit (void)
 {
   ASSERT (!intr_context ());
 
+  list_remove(&thread_current()->all_elem);
 #ifdef USERPROG
   process_exit ();
   free(thread_current()->file);
@@ -393,9 +399,9 @@ struct thread *thread_get_highest(struct list *list)
 struct thread *thread_get_by_tid(tid_t tid)
 {
   struct list_elem *e;
-  for (e = list_begin(&ready_list); e != list_end(&ready_list);
+  for (e = list_begin(&all_list); e != list_end(&all_list);
       e = list_next(e)) {
-    struct thread *t = list_entry(e, struct thread, elem);
+    struct thread *t = list_entry(e, struct thread, all_elem);
     if (t->tid == tid)
       return t;
   }

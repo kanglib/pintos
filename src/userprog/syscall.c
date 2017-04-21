@@ -184,7 +184,7 @@ handle_open(const char *file)
     int fd = t->file_n++;
     if (fd >= t->file_alloc_n) {
       t->file_alloc_n *= 2;
-      t->file = realloc(t->file, t->file_alloc_n);
+      t->file = realloc(t->file, t->file_alloc_n * sizeof(struct file *));
     }
     t->file[fd] = f;
     return fd;

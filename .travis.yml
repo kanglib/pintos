@@ -10,4 +10,3 @@ before_install:
 script:
   - docker run -v $TRAVIS_BUILD_DIR:/pintos kanglib/pintos-kaist-qemu
     sh -c "make -C src/$TARGET_DIRECTORY grade"
-    && cat src/$TARGET_DIRECTORY/build/grade

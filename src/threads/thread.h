@@ -111,6 +111,7 @@ struct thread
     char name[16];                      /* Name (for debugging purposes). */
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
+    struct list_elem all_elem;          /* List element of all_list. */
 
     /* Shared between thread.c and synch.c. */
     int deferred_priority;              /* Deferred by thread_set_priority(). */
