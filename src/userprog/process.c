@@ -201,7 +201,7 @@ process_exit (void)
       }
 
 #ifdef VM
-      /* TODO */
+      page_destroy();
 #endif
 
       /* Correct ordering here is crucial.  We must set
@@ -337,9 +337,11 @@ load (const char *file_name, void (**eip) (void), void **esp)
   t->pagedir = pagedir_create ();
   if (t->pagedir == NULL) 
     goto done;
-  process_activate ();
-  if (!page_init())
+#ifdef VM
+  if (!page_create())
     goto done;
+#endif
+  process_activate ();
 
   /* Open executable file. */
   file = filesys_open(argv[0]);
@@ -540,7 +542,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 
       /* Get a page of memory. */
 #ifdef VM
-      uint8_t *kpage = falloc_get_frame(false);
+      uint8_t *kpage = frame_alloc(false);
 #else
       uint8_t *kpage = palloc_get_page (PAL_USER);
 #endif
@@ -579,7 +581,7 @@ setup_stack (void **esp)
   bool success = false;
 
 #ifdef VM
-  kpage = falloc_get_frame(true);
+  kpage = frame_alloc(true);
 #else
   kpage = palloc_get_page (PAL_USER | PAL_ZERO);
 #endif
@@ -607,7 +609,7 @@ static bool
 install_page (void *upage, void *kpage, bool writable)
 {
 #ifdef VM
-  return page_map(upage, kpage, writable);
+  return page_install(upage, kpage, writable);
 #else
   struct thread *t = thread_current ();
 

@@ -10,13 +10,19 @@ static unsigned page_hash(const struct hash_elem *p_, void *aux UNUSED);
 static bool page_less(const struct hash_elem *a_,
                       const struct hash_elem *b_,
                       void *aux UNUSED);
+static void page_free(struct hash_elem *e, void *aux UNUSED);
 
-bool page_init(void)
+bool page_create(void)
 {
   return hash_init(&thread_current()->page_table, page_hash, page_less, NULL);
 }
 
-bool page_map(void *upage, void *kpage, bool writable)
+void page_destroy(void)
+{
+  hash_destroy(&thread_current()->page_table, page_free);
+}
+
+bool page_install(void *upage, void *kpage, bool writable)
 {
   if (!page_lookup(upage)) {
     struct page *p;
@@ -63,4 +69,9 @@ static bool page_less(const struct hash_elem *a_,
   struct page *a = hash_entry(a_, struct page, elem);
   struct page *b = hash_entry(b_, struct page, elem);
   return a->vaddr < b->vaddr;
+}
+
+static void page_free(struct hash_elem *e, void *aux UNUSED)
+{
+  free(hash_entry(e, struct page, elem));
 }

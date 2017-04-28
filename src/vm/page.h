@@ -22,8 +22,9 @@ struct page {
   struct hash_elem elem;    /* Hash table element. */
 };
 
-bool page_init(void);
-bool page_map(void *upage, void *kpage, bool writable);
+bool page_create(void);
+void page_destroy(void);
+bool page_install(void *upage, void *kpage, bool writable);
 struct page *page_lookup(const void *vaddr);
 
 #endif /* vm/page.h */
