@@ -4,6 +4,7 @@
 #include "threads/palloc.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
+#include "vm/swap.h"
 
 static struct frame *frame_table;
 static size_t frame_cnt;
@@ -19,6 +20,8 @@ void frame_init(size_t page_cnt)
   for (i = 0; i < frame_cnt; i++)
     frame_table[i].paddr_base = (uintptr_t) palloc_get_page(PAL_USER);
   lock_init(&frame_table_lock);
+
+  swap_init();
 }
 
 void *falloc_get_frame(bool zero)

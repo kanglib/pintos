@@ -7,7 +7,7 @@
 
 /* Frame table descriptor. */
 struct frame {
-  uintptr_t paddr_base;
+  uintptr_t paddr_base; /* Base of physical address. */
 };
 
 void frame_init(size_t page_cnt);

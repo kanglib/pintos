@@ -13,7 +13,6 @@
 #include "threads/vaddr.h"
 #ifdef VM
 #include "vm/frame.h"
-#include "vm/page.h"
 #endif
 
 /* Page allocator.  Hands out memory in page-size (or
@@ -72,7 +71,6 @@ palloc_init (void)
              user_pages, "user pool");
 
   frame_init(bitmap_size(user_pool.used_map));
-  page_init();
 }
 
 /* Obtains and returns a group of PAGE_CNT contiguous free pages.

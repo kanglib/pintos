@@ -5,6 +5,7 @@
 #include <list.h>
 #include <stdint.h>
 #include "threads/synch.h"
+#include <hash.h>
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -138,6 +139,11 @@ struct thread
     struct semaphore sema2;             /* Synchronization. */
     struct thread *parent;              /* Parent process. */
     struct list child_list;             /* Child process information. */
+#endif
+
+#ifdef VM
+    /* Owned by vm/page.c. */
+    struct hash page_table;             /* Supplemental page table. */
 #endif
 
     /* Owned by thread.c. */
