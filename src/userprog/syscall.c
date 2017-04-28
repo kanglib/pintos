@@ -5,6 +5,7 @@
 #include "threads/thread.h"
 #include "threads/init.h"
 #include "threads/malloc.h"
+#include "threads/pte.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
 #include "userprog/pagedir.h"
@@ -32,8 +33,8 @@ static void handle_seek(int fd, unsigned position);
 static unsigned handle_tell(int fd);
 static void handle_close(int fd);
 
-static void *valid_addr (uint32_t *pd, const void *uaddr);
-static void *valid_uaddr (const void *uaddr);
+static void *valid_uaddr(const void *vaddr);
+static bool is_writable_vaddr(const void *vaddr);
 static bool get_user (const void *uaddr, int *data);
 static bool get_users (const void *uaddr, int **data, int c);
 
@@ -223,6 +224,8 @@ handle_read(int fd, void *buffer, unsigned size)
   if (fd >= t->file_n || !buffer || !valid_uaddr(buffer)
       || !valid_uaddr(buffer + size - 1))
     handle_exit(-1);
+  if (!is_writable_vaddr(buffer) || !is_writable_vaddr(buffer + size - 1))
+    handle_exit(-1);
 
   if(fd == 0) {
     unsigned i;
@@ -327,25 +330,25 @@ handle_close(int fd)
   }
 }
 
-static void *
-valid_addr (uint32_t *pd, const void *uaddr)
+static void *valid_uaddr(const void *vaddr)
 {
-  if (!uaddr || uaddr >= PHYS_BASE) return NULL;
-  else return pagedir_get_page(pd, uaddr);
+  if (vaddr && is_user_vaddr(vaddr))
+    return pagedir_get_page(thread_current()->pagedir, vaddr);
+  else
+    return NULL;
 }
 
-static void *
-valid_uaddr (const void *uaddr)
+static bool is_writable_vaddr(const void *vaddr)
 {
-  uint32_t *pd = thread_current() -> pagedir;
-  return valid_addr(pd, uaddr);
+  uint32_t *pd = thread_current()->pagedir;
+  uint32_t *pt = pde_get_pt(pd[pd_no(vaddr)]);
+  return pt[pt_no(vaddr)] & PTE_W;
 }
 
 static bool
 get_user (const void *uaddr, int *data)
 {
-  uint32_t *pd = thread_current() -> pagedir;
-  void *addr = valid_addr(pd, uaddr);
+  void *addr = valid_uaddr(uaddr);
   if(addr){
     *data = *((int *)addr);
     return true;
