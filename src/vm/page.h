@@ -15,10 +15,9 @@ struct page {
   enum page_status status;  /* Page state. */
   void *vaddr;              /* Virtual address. */
   union _mapping {
-    void *frame;            /* Frame if present. */
-    slot_t slot;            /* Swap slot if swapped. */
+    void *frame;            /* Frame if page is present. */
+    slot_t slot;            /* Swap slot if page is swapped. */
   } mapping;
-  bool is_writable;         /* RO/RW flag. */
   struct hash_elem elem;    /* Hash table element. */
 };
 
@@ -26,5 +25,7 @@ bool page_create(void);
 void page_destroy(void);
 bool page_install(void *upage, void *kpage, bool writable);
 struct page *page_lookup(const void *vaddr);
+void page_swap_in(struct page *page, void *frame);
+void page_swap_out(struct page *page, slot_t slot);
 
 #endif /* vm/page.h */

@@ -1,6 +1,7 @@
 #include "vm/page.h"
 #include <debug.h>
 #include "threads/malloc.h"
+#include "threads/pte.h"
 #include "threads/synch.h"
 #include "threads/thread.h"
 #include "userprog/pagedir.h"
@@ -33,13 +34,13 @@ bool page_install(void *upage, void *kpage, bool writable)
     p->status = PAGE_PRESENT;
     p->vaddr = upage;
     p->mapping.frame = kpage;
-    p->is_writable = writable;
 
     t = thread_current();
     if (!pagedir_set_page(t->pagedir, upage, kpage, writable)) {
       free(p);
       return false;
     }
+    frame_set_page(kpage, p);
     hash_insert(&t->page_table, &p->elem);
     return true;
   }
@@ -54,6 +55,32 @@ struct page *page_lookup(const void *vaddr)
   p.vaddr = (void *) vaddr;
   e = hash_find(&thread_current()->page_table, &p.elem);
   return e ? hash_entry(e, struct page, elem) : NULL;
+}
+
+void page_swap_in(struct page *page, void *frame)
+{
+  uint32_t *pd;
+  uint32_t *pt;
+
+  page->status = PAGE_PRESENT;
+  page->mapping.frame = frame;
+
+  pd = thread_current()->pagedir;
+  pt = pde_get_pt(pd[pd_no(page->vaddr)]);
+  pt[pt_no(page->vaddr)] |= PTE_P;
+}
+
+void page_swap_out(struct page *page, slot_t slot)
+{
+  uint32_t *pd;
+  uint32_t *pt;
+
+  page->status = PAGE_SWAPPED;
+  page->mapping.slot = slot;
+
+  pd = thread_current()->pagedir;
+  pt = pde_get_pt(pd[pd_no(page->vaddr)]);
+  pt[pt_no(page->vaddr)] &= ~PTE_P;
 }
 
 static unsigned page_hash(const struct hash_elem *p_, void *aux UNUSED)
