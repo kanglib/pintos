@@ -1,11 +1,13 @@
 #include "vm/frame.h"
 #include <string.h>
+#include "threads/thread.h"
 #include "threads/malloc.h"
 #include "threads/palloc.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
 #include "vm/page.h"
 #include "vm/swap.h"
+#include "userprog/pagedir.h"
 
 static struct frame *frame_lookup(const uintptr_t paddr);
 static unsigned frame_hash(const struct hash_elem *f_, void *aux UNUSED);
@@ -45,6 +47,7 @@ void *frame_alloc(bool zero)
   struct frame *f;
   slot_t slot;
   size_t i;
+  uint32_t *pagedir = thread_current()->pagedir;
 
   lock_acquire(&frame_table_lock);
   for (i = 0; i < frame_count; i++) {
@@ -59,12 +62,24 @@ void *frame_alloc(bool zero)
     }
   }
 
-  /*TODO: implement eviction policy */
-  if (!hash_next(&frame_table_iter)) {
-    hash_first(&frame_table_iter, &frame_table);
-    hash_next(&frame_table_iter);
+  hash_first(&frame_table_iter, &frame_table);
+
+  for (;;) {
+    f = hash_entry(hash_cur(&frame_table_iter), struct frame, elem);
+
+    if (f->status == FRAME_FREE) {
+      f->status = FRAME_USED;
+      goto done;
+    } else if(pagedir_is_accessed(pagedir, f->page->vaddr)) {
+      pagedir_set_accessed(pagedir, f->page->vaddr, false);
+    } else break;
+
+    if(!hash_next(&frame_table_iter)) {
+      hash_first(&frame_table_iter, &frame_table);
+      hash_next(&frame_table_iter);
+    }
   }
-  f = hash_entry(hash_cur(&frame_table_iter), struct frame, elem);
+
   slot = swap_alloc();
   swap_write(slot, (void *) f->paddr);
   page_swap_out(f->page, slot);
