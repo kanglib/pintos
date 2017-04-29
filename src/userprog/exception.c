@@ -4,6 +4,11 @@
 #include "userprog/gdt.h"
 #include "threads/interrupt.h"
 #include "threads/thread.h"
+#ifdef VM
+#include "vm/frame.h"
+#include "vm/page.h"
+#include "vm/swap.h"
+#endif
 
 /* Number of page faults processed. */
 static long long page_fault_cnt;
@@ -148,14 +153,18 @@ page_fault (struct intr_frame *f)
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
 
-  /* To implement virtual memory, delete the rest of the function
-     body, and replace it with code that brings in the page to
-     which fault_addr refers. */
-  printf ("Page fault at %p: %s error %s page in %s context.\n",
-          fault_addr,
-          not_present ? "not present" : "rights violation",
-          write ? "writing" : "reading",
-          user ? "user" : "kernel");
-  kill (f);
+  if (not_present && user) {
+    struct page *page;
+    void *frame;
+
+    if ((page = page_lookup(fault_addr)) == NULL)
+      kill(f);
+    frame = frame_alloc(false);
+    swap_read_intr(page->mapping.slot, frame);
+    swap_free(page->mapping.slot);
+    page_swap_in(page, frame);
+  } else {
+    kill(f);
+  }
 }
 

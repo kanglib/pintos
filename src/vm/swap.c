@@ -52,6 +52,12 @@ void swap_read(slot_t slot, void *frame)
   lock_release(&swap_table_lock);
 }
 
+void swap_read_intr(slot_t slot, void *frame)
+{
+  /*TODO*/
+  swap_read(slot, frame);
+}
+
 void swap_write(slot_t slot, const void *frame)
 {
   int i;

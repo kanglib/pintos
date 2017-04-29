@@ -34,6 +34,7 @@ bool page_install(void *upage, void *kpage, bool writable)
     p->status = PAGE_PRESENT;
     p->vaddr = upage;
     p->mapping.frame = kpage;
+    p->is_writable = writable;
 
     t = thread_current();
     if (!pagedir_set_page(t->pagedir, upage, kpage, writable)) {
@@ -59,15 +60,14 @@ struct page *page_lookup(const void *vaddr)
 
 void page_swap_in(struct page *page, void *frame)
 {
-  uint32_t *pd;
-  uint32_t *pt;
-
   page->status = PAGE_PRESENT;
   page->mapping.frame = frame;
 
-  pd = thread_current()->pagedir;
-  pt = pde_get_pt(pd[pd_no(page->vaddr)]);
-  pt[pt_no(page->vaddr)] |= PTE_P;
+  pagedir_set_page(thread_current()->pagedir,
+                   page->vaddr,
+                   frame,
+                   page->is_writable);
+  frame_set_page(frame, page);
 }
 
 void page_swap_out(struct page *page, slot_t slot)
@@ -80,7 +80,7 @@ void page_swap_out(struct page *page, slot_t slot)
 
   pd = thread_current()->pagedir;
   pt = pde_get_pt(pd[pd_no(page->vaddr)]);
-  pt[pt_no(page->vaddr)] &= ~PTE_P;
+  pt[pt_no(page->vaddr)] = 0;
 }
 
 static unsigned page_hash(const struct hash_elem *p_, void *aux UNUSED)

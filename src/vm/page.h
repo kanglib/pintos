@@ -18,6 +18,7 @@ struct page {
     void *frame;            /* Frame if page is present. */
     slot_t slot;            /* Swap slot if page is swapped. */
   } mapping;
+  bool is_writable;         /* RO/RW flag. */
   struct hash_elem elem;    /* Hash table element. */
 };
 
