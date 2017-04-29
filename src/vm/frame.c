@@ -60,6 +60,10 @@ void *frame_alloc(bool zero)
   }
 
   /*TODO: implement eviction policy */
+  if (!hash_next(&frame_table_iter)) {
+    hash_first(&frame_table_iter, &frame_table);
+    hash_next(&frame_table_iter);
+  }
   f = hash_entry(hash_cur(&frame_table_iter), struct frame, elem);
   slot = swap_alloc();
   swap_write(slot, (void *) f->paddr);
