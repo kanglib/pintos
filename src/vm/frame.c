@@ -59,14 +59,10 @@ void *frame_alloc(bool zero)
     if (f->status == FRAME_FREE) {
       f->status = FRAME_USED;
       goto done;
-    } else {
-      pagedir_set_accessed(pagedir, f->page->vaddr, false);
     }
   }
 
   hash_first(&frame_table_iter, &frame_table);
-  //hash_next(&frame_table_iter);
-
 
   for (;;) {
     f = hash_entry(hash_cur(&frame_table_iter), struct frame, elem);
@@ -84,7 +80,6 @@ void *frame_alloc(bool zero)
     }
   }
 
-   f = hash_entry(hash_cur(&frame_table_iter), struct frame, elem);
   slot = swap_alloc();
   swap_write(slot, (void *) f->paddr);
   page_swap_out(f->page, slot);
