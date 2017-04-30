@@ -155,7 +155,7 @@ page_fault (struct intr_frame *f)
   user = (f->error_code & PF_U) != 0;
 
 #ifdef VM
-  if (not_present && user) {
+  if (not_present && is_user_vaddr(fault_addr)) {
     struct page *page;
     void *frame;
 

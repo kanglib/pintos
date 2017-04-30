@@ -32,6 +32,7 @@ void frame_init(void)
     f = malloc(sizeof(struct frame));
     f->status = FRAME_FREE;
     f->paddr = paddr;
+    f->pagedir = NULL;
     f->page = NULL;
     hash_insert(&frame_table, &f->elem);
     frame_count++;
@@ -45,7 +46,6 @@ void frame_init(void)
 void *frame_alloc(bool zero)
 {
   struct frame *f = NULL;
-  uint32_t *pd;
   slot_t slot;
   size_t i;
 
@@ -63,21 +63,20 @@ void *frame_alloc(bool zero)
     }
   }
 
-  pd = thread_current()->pagedir;
-  for (i = 0; i < frame_count; i++) {
+  for (;;) {
     f = hash_entry(hash_cur(&frame_table_iter), struct frame, elem);
     if (!hash_next(&frame_table_iter)) {
       hash_first(&frame_table_iter, &frame_table);
       hash_next(&frame_table_iter);
     }
-    if (pagedir_is_accessed(pd, f->page->vaddr))
-      pagedir_set_accessed(pd, f->page->vaddr, false);
+    if (pagedir_is_accessed(f->pagedir, f->page->vaddr))
+      pagedir_set_accessed(f->pagedir, f->page->vaddr, false);
     else
       break;
   }
   slot = swap_alloc();
   swap_write(slot, (void *) f->paddr);
-  page_swap_out(f->page, slot);
+  page_swap_out(f->page, f->pagedir, slot);
 
 done:
   lock_release(&frame_table_lock);
@@ -104,6 +103,7 @@ void frame_set_page(void *frame, struct page *page)
   lock_acquire(&frame_table_lock);
   f = frame_lookup((uintptr_t) frame);
   ASSERT(f);
+  f->pagedir = thread_current()->pagedir;
   f->page = page;
   lock_release(&frame_table_lock);
 }

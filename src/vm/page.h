@@ -27,6 +27,6 @@ void page_destroy(void);
 bool page_install(void *upage, void *kpage, bool writable);
 struct page *page_lookup(const void *vaddr);
 void page_swap_in(struct page *page, void *frame);
-void page_swap_out(struct page *page, slot_t slot);
+void page_swap_out(struct page *page, uint32_t *pagedir, slot_t slot);
 
 #endif /* vm/page.h */

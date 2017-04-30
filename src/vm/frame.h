@@ -13,6 +13,7 @@ enum frame_status {
 struct frame {
   enum frame_status status; /* Frame state. */
   uintptr_t paddr;          /* Physical address. */
+  uint32_t *pagedir;        /* Page directory if frame is used. */
   struct page *page;        /* Page if frame is used. */
   struct hash_elem elem;    /* Hash table element. */
 };

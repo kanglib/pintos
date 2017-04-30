@@ -8,7 +8,7 @@
 #include "threads/vaddr.h"
 
 /* Size of a swap slot in disk sectors. */
-#define SLOT_SIZE ((PGSIZE) / (DISK_SECTOR_SIZE))
+#define SLOT_SIZE (PGSIZE / DISK_SECTOR_SIZE)
 
 static void swap_in_job_thread(void *aux);
 
@@ -47,7 +47,7 @@ slot_t swap_alloc(void)
   lock_acquire(&swap_table_lock);
   slot = bitmap_scan_and_flip(swap_table, 0, 1, false);
   if (slot == BITMAP_ERROR)
-    PANIC("swap_alloc: out of swap");
+    PANIC("out of swap");
   lock_release(&swap_table_lock);
   return slot;
 }
@@ -64,11 +64,8 @@ void swap_free(slot_t slot)
 void swap_read(slot_t slot, void *frame)
 {
   int i;
-
-  lock_acquire(&swap_table_lock);
   for (i = 0; i < SLOT_SIZE; i++)
     disk_read(swap_disk, slot * SLOT_SIZE + i, frame + i * DISK_SECTOR_SIZE);
-  lock_release(&swap_table_lock);
 }
 
 void swap_read_intr(slot_t slot, void *frame)
@@ -84,11 +81,8 @@ void swap_read_intr(slot_t slot, void *frame)
 void swap_write(slot_t slot, const void *frame)
 {
   int i;
-
-  lock_acquire(&swap_table_lock);
   for (i = 0; i < SLOT_SIZE; i++)
     disk_write(swap_disk, slot * SLOT_SIZE + i, frame + i * DISK_SECTOR_SIZE);
-  lock_release(&swap_table_lock);
 }
 
 static void swap_in_job_thread(void *aux UNUSED)

@@ -6,6 +6,7 @@
 #include "threads/thread.h"
 #include "userprog/pagedir.h"
 #include "vm/frame.h"
+#include "vm/swap.h"
 
 static unsigned page_hash(const struct hash_elem *p_, void *aux UNUSED);
 static bool page_less(const struct hash_elem *a_,
@@ -70,16 +71,14 @@ void page_swap_in(struct page *page, void *frame)
   frame_set_page(frame, page);
 }
 
-void page_swap_out(struct page *page, slot_t slot)
+void page_swap_out(struct page *page, uint32_t *pagedir, slot_t slot)
 {
-  uint32_t *pd;
   uint32_t *pt;
 
   page->status = PAGE_SWAPPED;
   page->mapping.slot = slot;
 
-  pd = thread_current()->pagedir;
-  pt = pde_get_pt(pd[pd_no(page->vaddr)]);
+  pt = pde_get_pt(pagedir[pd_no(page->vaddr)]);
   pt[pt_no(page->vaddr)] = 0;
 }
 
@@ -100,5 +99,10 @@ static bool page_less(const struct hash_elem *a_,
 
 static void page_free(struct hash_elem *e, void *aux UNUSED)
 {
-  free(hash_entry(e, struct page, elem));
+  struct page *p = hash_entry(e, struct page, elem);
+  if (p->status == PAGE_PRESENT)
+    frame_free(p->mapping.frame);
+  else
+    swap_free(p->mapping.slot);
+  free(p);
 }
