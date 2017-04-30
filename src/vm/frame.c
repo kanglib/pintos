@@ -9,7 +9,6 @@
 #include "vm/page.h"
 #include "vm/swap.h"
 
-static struct frame *frame_lookup(const uintptr_t paddr);
 static unsigned frame_hash(const struct hash_elem *f_, void *aux UNUSED);
 static bool frame_less(const struct hash_elem *a_,
                        const struct hash_elem *b_,
@@ -96,6 +95,16 @@ void frame_free(void *frame)
   lock_release(&frame_table_lock);
 }
 
+struct frame *frame_lookup(const uintptr_t paddr)
+{
+  struct frame f;
+  struct hash_elem *e;
+
+  f.paddr = paddr;
+  e = hash_find(&frame_table, &f.elem);
+  return e ? hash_entry(e, struct frame, elem) : NULL;
+}
+
 void frame_set_page(void *frame, struct page *page)
 {
   struct frame *f;
@@ -106,16 +115,6 @@ void frame_set_page(void *frame, struct page *page)
   f->pagedir = thread_current()->pagedir;
   f->page = page;
   lock_release(&frame_table_lock);
-}
-
-static struct frame *frame_lookup(const uintptr_t paddr)
-{
-  struct frame f;
-  struct hash_elem *e;
-
-  f.paddr = paddr;
-  e = hash_find(&frame_table, &f.elem);
-  return e ? hash_entry(e, struct frame, elem) : NULL;
 }
 
 static unsigned frame_hash(const struct hash_elem *f_, void *aux UNUSED)

@@ -183,7 +183,9 @@ process_exit (void)
       list = &curr->child_list;
       for (e = list_begin(list); e != list_end(list); e = list_next(e)) {
         struct child *c = list_entry(e, struct child, elem);
-        thread_get_by_tid(c->tid)->parent = NULL;
+        struct thread *t = thread_get_by_tid(c->tid);
+        if (t)
+          t->parent = NULL;
         list_remove(e);
         free(c);
       }

@@ -21,6 +21,7 @@ struct frame {
 void frame_init(void);
 void *frame_alloc(bool zero);
 void frame_free(void *frame);
+struct frame *frame_lookup(const uintptr_t paddr);
 void frame_set_page(void *frame, struct page *page);
 
 #endif /* vm/frame.h */

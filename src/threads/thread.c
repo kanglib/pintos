@@ -405,7 +405,7 @@ struct thread *thread_get_by_tid(tid_t tid)
     if (t->tid == tid)
       return t;
   }
-  NOT_REACHED();
+  return NULL;
 }
 
 /* Idle thread.  Executes when no other thread is ready to run.
