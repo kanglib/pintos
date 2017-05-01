@@ -10,6 +10,9 @@ enum page_status {
   PAGE_SWAPPED  /* Swapped into disk. */
 };
 
+/* Limit of user stack size. */
+#define USER_STACK_LIMIT (8192 * 1024)
+
 /* Page table descriptor. */
 struct page {
   enum page_status status;  /* Page state. */

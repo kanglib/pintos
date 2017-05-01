@@ -159,8 +159,15 @@ page_fault (struct intr_frame *f)
     struct page *page;
     void *frame;
 
-    if ((page = page_lookup(pg_round_down(fault_addr))) == NULL)
-      kill(f);
+    if ((page = page_lookup(pg_round_down(fault_addr))) == NULL) {
+      if (fault_addr >= f->esp - 32
+          && fault_addr >= PHYS_BASE - USER_STACK_LIMIT) {
+        page_install(pg_round_down(fault_addr), frame_alloc(true), true);
+        return;
+      } else {
+        kill(f);
+      }
+    }
     frame = frame_alloc(false);
     swap_read_intr(page->mapping.slot, frame);
     swap_free(page->mapping.slot);
