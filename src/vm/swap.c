@@ -46,9 +46,9 @@ slot_t swap_alloc(void)
 
   lock_acquire(&swap_table_lock);
   slot = bitmap_scan_and_flip(swap_table, 0, 1, false);
+  lock_release(&swap_table_lock);
   if (slot == BITMAP_ERROR)
     PANIC("out of swap");
-  lock_release(&swap_table_lock);
   return slot;
 }
 

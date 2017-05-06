@@ -36,6 +36,7 @@
 #endif
 #ifdef VM
 #include "vm/frame.h"
+#include "vm/page.h"
 #include "vm/swap.h"
 #endif
 
@@ -122,6 +123,7 @@ main (void)
 #ifdef VM
   frame_init();
   swap_init();
+  lock_init(&page_global_lock);
 #endif
 
   printf ("Boot complete.\n");

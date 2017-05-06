@@ -32,4 +32,6 @@ struct page *page_lookup(const void *vaddr);
 void page_swap_in(struct page *page, void *frame);
 void page_swap_out(struct page *page, uint32_t *pagedir, slot_t slot);
 
+extern struct lock page_global_lock;
+
 #endif /* vm/page.h */

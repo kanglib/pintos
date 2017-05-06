@@ -42,6 +42,7 @@ struct donation {
    Used in thread structures. */
 struct child {
   tid_t tid;                            /* Thread identifier. */
+  bool is_reaped;                       /* Flag used for process_wait(). */
   int status;                           /* Exit status. */
   struct semaphore sema;                /* Synchronization. */
   struct list_elem elem;                /* List element. */

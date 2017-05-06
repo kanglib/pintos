@@ -75,6 +75,7 @@ process_execute (const char *file_name)
 
   c = malloc(sizeof(struct child));
   c->tid = tid;
+  c->is_reaped = false;
   c->status = -1;
   sema_init(&c->sema, 0);
   list_push_back(&thread_current()->child_list, &c->elem);
@@ -146,12 +147,11 @@ process_wait(tid_t child_tid)
   for (e = list_begin(list); e != list_end(list); e = list_next(e)) {
     struct child *c = list_entry(e, struct child, elem);
     if (c->tid == child_tid) {
-      int status;
+      if (c->is_reaped)
+        return -1;
       sema_down(&c->sema);
-      status = c->status;
-      list_remove(e);
-      free(c);
-      return status;
+      c->is_reaped = true;
+      return c->status;
     }
   }
   return -1;
@@ -181,12 +181,13 @@ process_exit (void)
       lock_release(&fs_lock);
 
       list = &curr->child_list;
-      for (e = list_begin(list); e != list_end(list); e = list_next(e)) {
+      for (e = list_begin(list); e != list_end(list);) {
         struct child *c = list_entry(e, struct child, elem);
         struct thread *t = thread_get_by_tid(c->tid);
         if (t)
           t->parent = NULL;
         list_remove(e);
+        e = list_next(e);
         free(c);
       }
 
@@ -544,6 +545,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 
       /* Get a page of memory. */
 #ifdef VM
+      lock_acquire(&page_global_lock);
       uint8_t *kpage = frame_alloc(false);
 #else
       uint8_t *kpage = palloc_get_page (PAL_USER);
@@ -565,6 +567,9 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
           palloc_free_page (kpage);
           return false; 
         }
+#ifdef VM
+      lock_release(&page_global_lock);
+#endif
 
       /* Advance. */
       read_bytes -= page_read_bytes;
@@ -583,6 +588,7 @@ setup_stack (void **esp)
   bool success = false;
 
 #ifdef VM
+  lock_acquire(&page_global_lock);
   kpage = frame_alloc(true);
 #else
   kpage = palloc_get_page (PAL_USER | PAL_ZERO);
@@ -595,6 +601,9 @@ setup_stack (void **esp)
       else
         palloc_free_page (kpage);
     }
+#ifdef VM
+  lock_release(&page_global_lock);
+#endif
   return success;
 }
 

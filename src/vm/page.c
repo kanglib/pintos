@@ -14,6 +14,8 @@ static bool page_less(const struct hash_elem *a_,
                       void *aux UNUSED);
 static void page_free(struct hash_elem *e, void *aux UNUSED);
 
+struct lock page_global_lock;
+
 bool page_create(void)
 {
   return hash_init(&thread_current()->page_table, page_hash, page_less, NULL);
@@ -100,9 +102,11 @@ static bool page_less(const struct hash_elem *a_,
 static void page_free(struct hash_elem *e, void *aux UNUSED)
 {
   struct page *p = hash_entry(e, struct page, elem);
+  lock_acquire(&page_global_lock);
   if (p->status == PAGE_PRESENT)
     frame_free(p->mapping.frame);
   else
     swap_free(p->mapping.slot);
+  lock_release(&page_global_lock);
   free(p);
 }
