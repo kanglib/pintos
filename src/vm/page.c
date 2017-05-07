@@ -81,7 +81,7 @@ void page_swap_out(struct page *page, uint32_t *pagedir, slot_t slot)
   page->mapping.slot = slot;
 
   pt = pde_get_pt(pagedir[pd_no(page->vaddr)]);
-  pt[pt_no(page->vaddr)] = 0;
+  pt[pt_no(page->vaddr)] &= ~PTE_P;
 }
 
 static unsigned page_hash(const struct hash_elem *p_, void *aux UNUSED)
