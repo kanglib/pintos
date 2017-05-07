@@ -327,7 +327,6 @@ static void handle_close(int fd)
 
 static bool is_valid_vaddr(const void *vaddr, unsigned size)
 {
-  uint32_t *pd;
   void *start;
   void *end;
   void *p;
@@ -335,11 +334,14 @@ static bool is_valid_vaddr(const void *vaddr, unsigned size)
   if (!vaddr || !is_user_vaddr(vaddr + size - 1))
     return false;
 
-  pd = thread_current()->pagedir;
   start = pg_round_down(vaddr);
   end = pg_round_up(vaddr + size);
   for (p = start; p < end; p += PGSIZE)
-    if (!pagedir_get_page(pd, p))
+#ifdef VM
+    if (!page_lookup(p))
+#else
+    if (!pagedir_get_page(thread_current()->pagedir, p))
+#endif
       return false;
   return true;
 }
