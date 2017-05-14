@@ -5,10 +5,12 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 #ifdef VM
+#include <string.h>
 #include "threads/vaddr.h"
 #include "vm/frame.h"
 #include "vm/page.h"
 #include "vm/swap.h"
+#include "filesys/file.h"
 #endif
 
 /* Number of page faults processed. */
@@ -159,22 +161,35 @@ page_fault (struct intr_frame *f)
     struct page *page;
     void *frame;
 
+    lock_acquire(&page_global_lock);
     if ((page = page_lookup(pg_round_down(fault_addr))) == NULL) {
       if (fault_addr >= f->esp - 32
           && fault_addr >= PHYS_BASE - USER_STACK_LIMIT) {
-        lock_acquire(&page_global_lock);
         page_install(pg_round_down(fault_addr), frame_alloc(true), true);
         lock_release(&page_global_lock);
         return;
       } else {
+        lock_release(&page_global_lock);
         kill(f);
       }
     }
-    lock_acquire(&page_global_lock);
-    frame = frame_alloc(false);
-    swap_read_intr(page->mapping.slot, frame);
-    swap_free(page->mapping.slot);
-    page_swap_in(page, frame);
+    if (page->status == PAGE_SWAPPED) {
+      frame = frame_alloc(false);
+      swap_read_intr(page->mapping.slot, frame);
+      swap_free(page->mapping.slot);
+      page_swap_in(page, frame);
+    } else {
+      uint32_t bytes = page->load_info.bytes;
+      if (bytes) {
+        frame = frame_alloc(false);
+        file_seek(page->load_info.file, page->load_info.offset);
+        file_read(page->load_info.file, frame, bytes);
+        memset(frame + bytes, 0, PGSIZE - bytes);
+      } else {
+        frame = frame_alloc(true);
+      }
+      page_swap_in(page, frame);
+    }
     lock_release(&page_global_lock);
   } else {
     kill(f);

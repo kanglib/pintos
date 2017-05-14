@@ -73,6 +73,16 @@ void *frame_alloc(bool zero)
     else
       break;
   }
+
+  if (f->page->load_info.file) {
+    if (!pagedir_is_dirty(f->pagedir, f->page->vaddr)) {
+      page_drop(f->page, f->pagedir);
+      goto done;
+    } else {
+      f->page->load_info.file = NULL;
+    }
+  }
+
   slot = swap_alloc();
   swap_write(slot, (void *) f->paddr);
   page_swap_out(f->page, f->pagedir, slot);

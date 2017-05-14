@@ -37,6 +37,7 @@ bool page_install(void *upage, void *kpage, bool writable)
     p->status = PAGE_PRESENT;
     p->vaddr = upage;
     p->mapping.frame = kpage;
+    p->load_info.file = NULL;
     p->is_writable = writable;
 
     t = thread_current();
@@ -84,6 +85,36 @@ void page_swap_out(struct page *page, uint32_t *pagedir, slot_t slot)
   pt[pt_no(page->vaddr)] &= ~PTE_P;
 }
 
+bool page_map(void *upage,
+              struct file *file,
+              off_t offset,
+              uint32_t bytes,
+              bool writable)
+{
+  if (!page_lookup(upage)) {
+    struct page *p;
+    if ((p = malloc(sizeof(struct page))) == NULL)
+      return false;
+    p->status = PAGE_LOADING;
+    p->vaddr = upage;
+    p->load_info.file = file;
+    p->load_info.offset = offset;
+    p->load_info.bytes = bytes;
+    p->is_writable = writable;
+    hash_insert(&thread_current()->page_table, &p->elem);
+    return true;
+  }
+  return false;
+}
+
+void page_drop(struct page *page, uint32_t *pagedir)
+{
+  uint32_t *pt;
+  page->status = PAGE_LOADING;
+  pt = pde_get_pt(pagedir[pd_no(page->vaddr)]);
+  pt[pt_no(page->vaddr)] = 0;
+}
+
 static unsigned page_hash(const struct hash_elem *p_, void *aux UNUSED)
 {
   struct page *p = hash_entry(p_, struct page, elem);
@@ -105,7 +136,7 @@ static void page_free(struct hash_elem *e, void *aux UNUSED)
   lock_acquire(&page_global_lock);
   if (p->status == PAGE_PRESENT)
     frame_free(p->mapping.frame);
-  else
+  else if (p->status == PAGE_SWAPPED)
     swap_free(p->mapping.slot);
   lock_release(&page_global_lock);
   free(p);

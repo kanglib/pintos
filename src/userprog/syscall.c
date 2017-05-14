@@ -336,13 +336,20 @@ static bool is_valid_vaddr(const void *vaddr, unsigned size)
 
   start = pg_round_down(vaddr);
   end = pg_round_up(vaddr + size);
-  for (p = start; p < end; p += PGSIZE)
 #ifdef VM
-    if (!page_lookup(p))
-#else
-    if (!pagedir_get_page(thread_current()->pagedir, p))
-#endif
+  lock_acquire(&page_global_lock);
+  for (p = start; p < end; p += PGSIZE) {
+    if (!page_lookup(p)) {
+      lock_release(&page_global_lock);
       return false;
+    }
+  }
+  lock_release(&page_global_lock);
+#else
+  for (p = start; p < end; p += PGSIZE)
+    if (!pagedir_get_page(thread_current()->pagedir, p))
+      return false;
+#endif
   return true;
 }
 
@@ -360,8 +367,12 @@ static bool is_writable_vaddr(const void *vaddr, unsigned size)
   start = pg_round_down(vaddr);
   end = pg_round_up(vaddr + size);
   for (p = start; p < end; p += PGSIZE) {
+#ifdef VM
+    if (!page_lookup(p)->is_writable)
+#else
     uint32_t *pt = pde_get_pt(pd[pd_no(vaddr)]);
     if (~pt[pt_no(vaddr)] & PTE_W)
+#endif
       return false;
   }
   return true;
@@ -396,7 +407,9 @@ static void grow_stack(const void *vaddr, unsigned size, const void *esp)
         if (~pt[pt_no(vaddr)] & PTE_W)
           handle_exit(-1);
       } else {
+        lock_acquire(&page_global_lock);
         page_install(p, frame_alloc(true), true);
+        lock_release(&page_global_lock);
       }
     }
   } else {

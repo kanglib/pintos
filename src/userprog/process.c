@@ -543,13 +543,21 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
       size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
-      /* Get a page of memory. */
 #ifdef VM
+      bool success;
       lock_acquire(&page_global_lock);
-      uint8_t *kpage = frame_alloc(false);
+      success = page_map(upage,
+                         file,
+                         file_tell(file),
+                         page_read_bytes,
+                         writable);
+      lock_release(&page_global_lock);
+      if (!success)
+        return false;
+      file_seek(file, file_tell(file) + page_read_bytes);
 #else
+      /* Get a page of memory. */
       uint8_t *kpage = palloc_get_page (PAL_USER);
-#endif
       if (kpage == NULL)
         return false;
 
@@ -567,8 +575,6 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
           palloc_free_page (kpage);
           return false; 
         }
-#ifdef VM
-      lock_release(&page_global_lock);
 #endif
 
       /* Advance. */
