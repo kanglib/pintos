@@ -15,6 +15,7 @@
 #include "filesys/filesys.h"
 #ifdef VM
 #include "vm/frame.h"
+#include "vm/mmap.h"
 #include "vm/page.h"
 #endif
 
@@ -35,6 +36,10 @@ static int handle_write(int fd, const void *buffer, unsigned size);
 static void handle_seek(int fd, unsigned position);
 static unsigned handle_tell(int fd);
 static void handle_close(int fd);
+#ifdef VM
+static mapid_t handle_mmap(int fd, void *addr);
+static void handle_munmap(mapid_t mapping);
+#endif
 
 static bool is_valid_vaddr(const void *vaddr, unsigned size);
 static bool is_writable_vaddr(const void *vaddr, unsigned size);
@@ -112,6 +117,18 @@ static void syscall_handler(struct intr_frame *f)
     read_args(f->esp, args, 1);
     handle_close(args[0]);
     break;
+#ifdef VM
+  case SYS_MMAP:
+    read_args(f->esp, args, 2);
+    f->eax = handle_mmap(args[0], (void *) args[1]);
+    break;
+  case SYS_MUNMAP:
+    read_args(f->esp, args, 1);
+    handle_munmap(args[0]);
+    break;
+#endif
+  default:
+    handle_exit(-1);
   }
 }
 
@@ -325,6 +342,28 @@ static void handle_close(int fd)
   }
 }
 
+#ifdef VM
+static mapid_t handle_mmap(int fd, void *addr)
+{
+  struct thread *t;
+  struct file *f;
+
+  t = thread_current();
+  if (fd >= t->file_n)
+    handle_exit(-1);
+
+  if ((f = t->file[fd]))
+    return mmap_map(f, addr);
+  else
+    return -1;
+}
+
+static void handle_munmap(mapid_t mapping)
+{
+  mmap_unmap(mapping);
+}
+#endif
+
 static bool is_valid_vaddr(const void *vaddr, unsigned size)
 {
   void *start;
@@ -336,20 +375,13 @@ static bool is_valid_vaddr(const void *vaddr, unsigned size)
 
   start = pg_round_down(vaddr);
   end = pg_round_up(vaddr + size);
-#ifdef VM
-  lock_acquire(&page_global_lock);
-  for (p = start; p < end; p += PGSIZE) {
-    if (!page_lookup(p)) {
-      lock_release(&page_global_lock);
-      return false;
-    }
-  }
-  lock_release(&page_global_lock);
-#else
   for (p = start; p < end; p += PGSIZE)
+#ifdef VM
+    if (!page_lookup(p))
+#else
     if (!pagedir_get_page(thread_current()->pagedir, p))
-      return false;
 #endif
+      return false;
   return true;
 }
 

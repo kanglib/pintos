@@ -6,6 +6,7 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 #include "userprog/pagedir.h"
+#include "userprog/syscall.h"
 #include "vm/page.h"
 #include "vm/swap.h"
 
@@ -74,13 +75,17 @@ void *frame_alloc(bool zero)
       break;
   }
 
-  if (f->page->load_info.file) {
-    if (!pagedir_is_dirty(f->pagedir, f->page->vaddr)) {
-      page_drop(f->page, f->pagedir);
-      goto done;
-    } else {
-      f->page->load_info.file = NULL;
+  if (f->page->load_info.file && f->page->load_info.bytes) {
+    if (pagedir_is_dirty(f->pagedir, f->page->vaddr)) {
+      lock_acquire(&fs_lock);
+      file_seek(f->page->load_info.file, f->page->load_info.offset);
+      file_write(f->page->load_info.file,
+                 (void *) f->paddr,
+                 f->page->load_info.bytes);
+      lock_release(&fs_lock);
     }
+    page_drop(f->page, f->pagedir);
+    goto done;
   }
 
   slot = swap_alloc();

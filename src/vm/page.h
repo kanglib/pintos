@@ -35,6 +35,7 @@ struct page {
 bool page_create(void);
 void page_destroy(void);
 bool page_install(void *upage, void *kpage, bool writable);
+void page_remove(struct page *page);
 struct page *page_lookup(const void *vaddr);
 void page_swap_in(struct page *page, void *frame);
 void page_swap_out(struct page *page, uint32_t *pagedir, slot_t slot);

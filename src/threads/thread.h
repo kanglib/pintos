@@ -6,6 +6,9 @@
 #include <stdint.h>
 #include "threads/synch.h"
 #include <hash.h>
+#ifdef VM
+#include "vm/mmap.h"
+#endif
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -145,6 +148,10 @@ struct thread
 #ifdef VM
     /* Owned by vm/page.c. */
     struct hash page_table;             /* Supplemental page table. */
+
+    /* Owned by vm/mmap.c. */
+    struct hash mmap_table;             /* Map region table. */
+    mapid_t mmap_n;                     /* Maximum used mapids. */
 #endif
 
     /* Owned by thread.c. */

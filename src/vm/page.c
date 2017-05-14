@@ -23,7 +23,9 @@ bool page_create(void)
 
 void page_destroy(void)
 {
+  lock_acquire(&page_global_lock);
   hash_destroy(&thread_current()->page_table, page_free);
+  lock_release(&page_global_lock);
 }
 
 bool page_install(void *upage, void *kpage, bool writable)
@@ -52,6 +54,15 @@ bool page_install(void *upage, void *kpage, bool writable)
   return false;
 }
 
+void page_remove(struct page *page)
+{
+  if (page->status == PAGE_PRESENT)
+    frame_free(page->mapping.frame);
+  else if (page->status == PAGE_SWAPPED)
+    swap_free(page->mapping.slot);
+  free(page);
+}
+
 struct page *page_lookup(const void *vaddr)
 {
   struct page p;
@@ -76,13 +87,9 @@ void page_swap_in(struct page *page, void *frame)
 
 void page_swap_out(struct page *page, uint32_t *pagedir, slot_t slot)
 {
-  uint32_t *pt;
-
   page->status = PAGE_SWAPPED;
   page->mapping.slot = slot;
-
-  pt = pde_get_pt(pagedir[pd_no(page->vaddr)]);
-  pt[pt_no(page->vaddr)] &= ~PTE_P;
+  pagedir_clear_page(pagedir, page->vaddr);
 }
 
 bool page_map(void *upage,
@@ -109,10 +116,8 @@ bool page_map(void *upage,
 
 void page_drop(struct page *page, uint32_t *pagedir)
 {
-  uint32_t *pt;
   page->status = PAGE_LOADING;
-  pt = pde_get_pt(pagedir[pd_no(page->vaddr)]);
-  pt[pt_no(page->vaddr)] = 0;
+  pagedir_clear_page(pagedir, page->vaddr);
 }
 
 static unsigned page_hash(const struct hash_elem *p_, void *aux UNUSED)
@@ -132,12 +137,5 @@ static bool page_less(const struct hash_elem *a_,
 
 static void page_free(struct hash_elem *e, void *aux UNUSED)
 {
-  struct page *p = hash_entry(e, struct page, elem);
-  lock_acquire(&page_global_lock);
-  if (p->status == PAGE_PRESENT)
-    frame_free(p->mapping.frame);
-  else if (p->status == PAGE_SWAPPED)
-    swap_free(p->mapping.slot);
-  lock_release(&page_global_lock);
-  free(p);
+  page_remove(hash_entry(e, struct page, elem));
 }

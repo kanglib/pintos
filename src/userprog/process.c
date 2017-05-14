@@ -18,15 +18,15 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 #include "threads/malloc.h"
+#include "userprog/syscall.h"
 #ifdef VM
 #include "vm/frame.h"
+#include "vm/mmap.h"
 #include "vm/page.h"
 #endif
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
-
-extern struct lock fs_lock;
 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
@@ -174,11 +174,6 @@ process_exit (void)
       int i;
 
       printf("%s: exit(%d)\n", thread_name(), curr->exit_code);
-      lock_acquire(&fs_lock);
-      file_close(curr->exe);
-      for (i = 2; i < curr->file_n; i++)
-        file_close(curr->file[i]);
-      lock_release(&fs_lock);
 
       list = &curr->child_list;
       for (e = list_begin(list); e != list_end(list);) {
@@ -203,6 +198,14 @@ process_exit (void)
         }
       }
 
+#ifdef VM
+      mmap_destroy();
+#endif
+      lock_acquire(&fs_lock);
+      file_close(curr->exe);
+      for (i = 2; i < curr->file_n; i++)
+        file_close(curr->file[i]);
+      lock_release(&fs_lock);
 #ifdef VM
       page_destroy();
 #endif
@@ -342,6 +345,8 @@ load (const char *file_name, void (**eip) (void), void **esp)
     goto done;
 #ifdef VM
   if (!page_create())
+    goto done;
+  if (!mmap_create())
     goto done;
 #endif
   process_activate ();
@@ -544,15 +549,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
 #ifdef VM
-      bool success;
-      lock_acquire(&page_global_lock);
-      success = page_map(upage,
-                         file,
-                         file_tell(file),
-                         page_read_bytes,
-                         writable);
-      lock_release(&page_global_lock);
-      if (!success)
+      if (!page_map(upage, file, file_tell(file), page_read_bytes, writable))
         return false;
       file_seek(file, file_tell(file) + page_read_bytes);
 #else

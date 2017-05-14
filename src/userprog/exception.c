@@ -177,7 +177,6 @@ page_fault (struct intr_frame *f)
       frame = frame_alloc(false);
       swap_read_intr(page->mapping.slot, frame);
       swap_free(page->mapping.slot);
-      page_swap_in(page, frame);
     } else {
       uint32_t bytes = page->load_info.bytes;
       if (bytes) {
@@ -188,8 +187,8 @@ page_fault (struct intr_frame *f)
       } else {
         frame = frame_alloc(true);
       }
-      page_swap_in(page, frame);
     }
+    page_swap_in(page, frame);
     lock_release(&page_global_lock);
   } else {
     kill(f);
