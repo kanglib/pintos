@@ -10,6 +10,7 @@
 #include "vm/page.h"
 #include "vm/swap.h"
 
+static struct frame *frame_lookup(const uintptr_t paddr);
 static unsigned frame_hash(const struct hash_elem *f_, void *aux UNUSED);
 static bool frame_less(const struct hash_elem *a_,
                        const struct hash_elem *b_,
@@ -46,6 +47,7 @@ void frame_init(void)
 void *frame_alloc(bool zero)
 {
   struct frame *f = NULL;
+  struct thread *curr;
   slot_t slot;
   size_t i;
 
@@ -88,9 +90,11 @@ void *frame_alloc(bool zero)
     goto done;
   }
 
-  slot = swap_alloc();
-  swap_write(slot, (void *) f->paddr);
+  curr = thread_current();
+  lock_acquire(&curr->page_table_lock);
+  slot = swap_alloc((void *) f->paddr);
   page_swap_out(f->page, f->pagedir, slot);
+  lock_release(&curr->page_table_lock);
 
 done:
   lock_release(&frame_table_lock);
@@ -103,14 +107,24 @@ done:
 void frame_free(void *frame)
 {
   struct frame *f;
-
   lock_acquire(&frame_table_lock);
   if ((f = frame_lookup((uintptr_t) frame)))
     f->status = FRAME_FREE;
   lock_release(&frame_table_lock);
 }
 
-struct frame *frame_lookup(const uintptr_t paddr)
+void frame_set_page(void *frame, struct page *page)
+{
+  struct frame *f;
+  lock_acquire(&frame_table_lock);
+  if ((f = frame_lookup((uintptr_t) frame))) {
+    f->pagedir = thread_current()->pagedir;
+    f->page = page;
+  }
+  lock_release(&frame_table_lock);
+}
+
+static struct frame *frame_lookup(const uintptr_t paddr)
 {
   struct frame f;
   struct hash_elem *e;
@@ -118,18 +132,6 @@ struct frame *frame_lookup(const uintptr_t paddr)
   f.paddr = paddr;
   e = hash_find(&frame_table, &f.elem);
   return e ? hash_entry(e, struct frame, elem) : NULL;
-}
-
-void frame_set_page(void *frame, struct page *page)
-{
-  struct frame *f;
-
-  lock_acquire(&frame_table_lock);
-  f = frame_lookup((uintptr_t) frame);
-  ASSERT(f);
-  f->pagedir = thread_current()->pagedir;
-  f->page = page;
-  lock_release(&frame_table_lock);
 }
 
 static unsigned frame_hash(const struct hash_elem *f_, void *aux UNUSED)

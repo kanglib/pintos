@@ -18,21 +18,28 @@ struct lock page_global_lock;
 
 bool page_create(void)
 {
-  return hash_init(&thread_current()->page_table, page_hash, page_less, NULL);
+  struct thread *curr = thread_current();
+  lock_init(&curr->page_table_lock);
+  return hash_init(&curr->page_table, page_hash, page_less, NULL);
 }
 
 void page_destroy(void)
 {
-  lock_acquire(&page_global_lock);
-  hash_destroy(&thread_current()->page_table, page_free);
-  lock_release(&page_global_lock);
+  struct thread *curr = thread_current();
+  lock_acquire(&curr->page_table_lock);
+  hash_destroy(&curr->page_table, page_free);
+  lock_release(&curr->page_table_lock);
 }
 
 bool page_install(void *upage, void *kpage, bool writable)
 {
+  struct thread *curr;
+
+  curr = thread_current();
+  lock_acquire(&curr->page_table_lock);
+
   if (!page_lookup(upage)) {
     struct page *p;
-    struct thread *t;
 
     if ((p = malloc(sizeof(struct page))) == NULL)
       return false;
@@ -41,16 +48,20 @@ bool page_install(void *upage, void *kpage, bool writable)
     p->mapping.frame = kpage;
     p->load_info.file = NULL;
     p->is_writable = writable;
+    hash_insert(&curr->page_table, &p->elem);
 
-    t = thread_current();
-    if (!pagedir_set_page(t->pagedir, upage, kpage, writable)) {
+    if (!pagedir_set_page(curr->pagedir, upage, kpage, writable)) {
+      hash_delete(&curr->page_table, &p->elem);
       free(p);
       return false;
     }
     frame_set_page(kpage, p);
-    hash_insert(&t->page_table, &p->elem);
+
+    lock_release(&curr->page_table_lock);
     return true;
   }
+
+  lock_release(&curr->page_table_lock);
   return false;
 }
 
@@ -59,8 +70,70 @@ void page_remove(struct page *page)
   if (page->status == PAGE_PRESENT)
     frame_free(page->mapping.frame);
   else if (page->status == PAGE_SWAPPED)
-    swap_free(page->mapping.slot);
+    swap_free(page->mapping.slot, NULL);
   free(page);
+}
+
+void page_swap_in(struct page *page, void *frame)
+{
+  struct thread *curr = thread_current();
+  lock_acquire(&curr->page_table_lock);
+  page->status = PAGE_PRESENT;
+  page->mapping.frame = frame;
+  pagedir_set_page(thread_current()->pagedir,
+                   page->vaddr,
+                   frame,
+                   page->is_writable);
+  frame_set_page(frame, page);
+  lock_release(&curr->page_table_lock);
+}
+
+void page_swap_out(struct page *page, uint32_t *pagedir, slot_t slot)
+{
+  pagedir_clear_page(pagedir, page->vaddr);
+  page->status = PAGE_SWAPPED;
+  page->mapping.slot = slot;
+}
+
+bool page_map(void *upage,
+              struct file *file,
+              off_t offset,
+              uint32_t bytes,
+              bool writable)
+{
+  struct thread *curr;
+
+  curr = thread_current();
+  lock_acquire(&curr->page_table_lock);
+
+  if (!page_lookup(upage)) {
+    struct page *p;
+
+    if ((p = malloc(sizeof(struct page))) == NULL)
+      return false;
+    p->status = PAGE_LOADING;
+    p->vaddr = upage;
+    p->load_info.file = file;
+    p->load_info.offset = offset;
+    p->load_info.bytes = bytes;
+    p->is_writable = writable;
+    hash_insert(&thread_current()->page_table, &p->elem);
+
+    lock_release(&curr->page_table_lock);
+    return true;
+  }
+
+  lock_release(&curr->page_table_lock);
+  return false;
+}
+
+void page_drop(struct page *page, uint32_t *pagedir)
+{
+  struct thread *curr = thread_current();
+  lock_acquire(&curr->page_table_lock);
+  pagedir_clear_page(pagedir, page->vaddr);
+  page->status = PAGE_LOADING;
+  lock_release(&curr->page_table_lock);
 }
 
 struct page *page_lookup(const void *vaddr)
@@ -71,53 +144,6 @@ struct page *page_lookup(const void *vaddr)
   p.vaddr = (void *) vaddr;
   e = hash_find(&thread_current()->page_table, &p.elem);
   return e ? hash_entry(e, struct page, elem) : NULL;
-}
-
-void page_swap_in(struct page *page, void *frame)
-{
-  page->status = PAGE_PRESENT;
-  page->mapping.frame = frame;
-
-  pagedir_set_page(thread_current()->pagedir,
-                   page->vaddr,
-                   frame,
-                   page->is_writable);
-  frame_set_page(frame, page);
-}
-
-void page_swap_out(struct page *page, uint32_t *pagedir, slot_t slot)
-{
-  page->status = PAGE_SWAPPED;
-  page->mapping.slot = slot;
-  pagedir_clear_page(pagedir, page->vaddr);
-}
-
-bool page_map(void *upage,
-              struct file *file,
-              off_t offset,
-              uint32_t bytes,
-              bool writable)
-{
-  if (!page_lookup(upage)) {
-    struct page *p;
-    if ((p = malloc(sizeof(struct page))) == NULL)
-      return false;
-    p->status = PAGE_LOADING;
-    p->vaddr = upage;
-    p->load_info.file = file;
-    p->load_info.offset = offset;
-    p->load_info.bytes = bytes;
-    p->is_writable = writable;
-    hash_insert(&thread_current()->page_table, &p->elem);
-    return true;
-  }
-  return false;
-}
-
-void page_drop(struct page *page, uint32_t *pagedir)
-{
-  page->status = PAGE_LOADING;
-  pagedir_clear_page(pagedir, page->vaddr);
 }
 
 static unsigned page_hash(const struct hash_elem *p_, void *aux UNUSED)

@@ -23,9 +23,7 @@ bool mmap_create(void)
 
 void mmap_destroy(void)
 {
-  lock_acquire(&page_global_lock);
   hash_destroy(&thread_current()->mmap_table, mmap_free);
-  lock_release(&page_global_lock);
 }
 
 mapid_t mmap_map(struct file *file, void *addr)
@@ -58,7 +56,9 @@ mapid_t mmap_map(struct file *file, void *addr)
   for (p = addr; p < end; p += PGSIZE) {
     if (!page_map(p, file, off, (bytes >= PGSIZE) ? PGSIZE : bytes, true)) {
       free(m);
+      lock_acquire(&fs_lock);
       file_close(file);
+      lock_release(&fs_lock);
       curr->exit_code = -1;
       thread_exit();
     }
@@ -93,6 +93,7 @@ static void mmap_remove(struct mmap *mmap)
   for (p = mmap->start; p < mmap->end; p += PGSIZE) {
     struct page *page;
 
+    lock_acquire(&curr->page_table_lock);
     page = page_lookup(p);
     if (page->status == PAGE_PRESENT) {
       if (pagedir_is_dirty(curr->pagedir, p)) {
@@ -108,6 +109,7 @@ static void mmap_remove(struct mmap *mmap)
 
     hash_delete(&curr->page_table, &page->elem);
     page_remove(page);
+    lock_release(&curr->page_table_lock);
   }
 
   lock_acquire(&fs_lock);

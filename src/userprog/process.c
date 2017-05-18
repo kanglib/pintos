@@ -99,9 +99,9 @@ start_process (void *f_name)
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
+  t = thread_current();
   lock_acquire(&fs_lock);
   success = load (file_name, &if_.eip, &if_.esp);
-  t = thread_current();
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
@@ -162,54 +162,55 @@ void
 process_exit (void)
 {
   struct thread *curr = thread_current ();
+  struct list *list;
+  struct list_elem *e;
   uint32_t *pd;
+  int i;
+
+  printf("%s: exit(%d)\n", thread_name(), curr->exit_code);
+
+  list = &curr->child_list;
+  for (e = list_begin(list); e != list_end(list);) {
+    struct child *c = list_entry(e, struct child, elem);
+    struct thread *t = thread_get_by_tid(c->tid);
+    if (t)
+      t->parent = NULL;
+    list_remove(e);
+    e = list_next(e);
+    free(c);
+  }
+
+  if (curr->parent) {
+    list = &curr->parent->child_list;
+    for (e = list_begin(list); e != list_end(list); e = list_next(e)) {
+      struct child *c = list_entry(e, struct child, elem);
+      if (c->tid == curr->tid) {
+        c->status = curr->exit_code;
+        sema_up(&c->sema);
+        break;
+      }
+    }
+  }
+
+#ifdef VM
+  mmap_destroy();
+#endif
+
+  lock_acquire(&fs_lock);
+  file_close(curr->exe);
+  for (i = 2; i < curr->file_n; i++)
+    file_close(curr->file[i]);
+  lock_release(&fs_lock);
+
+#ifdef VM
+  page_destroy();
+#endif
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
   pd = curr->pagedir;
   if (pd != NULL) 
     {
-      struct list *list;
-      struct list_elem *e;
-      int i;
-
-      printf("%s: exit(%d)\n", thread_name(), curr->exit_code);
-
-      list = &curr->child_list;
-      for (e = list_begin(list); e != list_end(list);) {
-        struct child *c = list_entry(e, struct child, elem);
-        struct thread *t = thread_get_by_tid(c->tid);
-        if (t)
-          t->parent = NULL;
-        list_remove(e);
-        e = list_next(e);
-        free(c);
-      }
-
-      if (curr->parent) {
-        list = &curr->parent->child_list;
-        for (e = list_begin(list); e != list_end(list); e = list_next(e)) {
-          struct child *c = list_entry(e, struct child, elem);
-          if (c->tid == curr->tid) {
-            c->status = curr->exit_code;
-            sema_up(&c->sema);
-            break;
-          }
-        }
-      }
-
-#ifdef VM
-      mmap_destroy();
-#endif
-      lock_acquire(&fs_lock);
-      file_close(curr->exe);
-      for (i = 2; i < curr->file_n; i++)
-        file_close(curr->file[i]);
-      lock_release(&fs_lock);
-#ifdef VM
-      page_destroy();
-#endif
-
       /* Correct ordering here is crucial.  We must set
          cur->pagedir to NULL before switching page directories,
          so that a timer interrupt can't switch back to the
@@ -344,9 +345,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
   if (t->pagedir == NULL) 
     goto done;
 #ifdef VM
-  if (!page_create())
-    goto done;
-  if (!mmap_create())
+  if (!page_create() || !mmap_create())
     goto done;
 #endif
   process_activate ();
@@ -539,7 +538,9 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
   ASSERT (pg_ofs (upage) == 0);
   ASSERT (ofs % PGSIZE == 0);
 
+#ifndef VM
   file_seek (file, ofs);
+#endif
   while (read_bytes > 0 || zero_bytes > 0) 
     {
       /* Do calculate how to fill this page.
@@ -549,9 +550,9 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
 #ifdef VM
-      if (!page_map(upage, file, file_tell(file), page_read_bytes, writable))
+      if (!page_map(upage, file, ofs, page_read_bytes, writable))
         return false;
-      file_seek(file, file_tell(file) + page_read_bytes);
+      ofs += page_read_bytes;
 #else
       /* Get a page of memory. */
       uint8_t *kpage = palloc_get_page (PAL_USER);
@@ -598,7 +599,11 @@ setup_stack (void **esp)
 #endif
   if (kpage != NULL) 
     {
+#ifdef VM
+      success = page_install(PHYS_BASE - PGSIZE, kpage, true);
+#else
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
+#endif
       if (success)
         *esp = PHYS_BASE;
       else
@@ -622,14 +627,10 @@ setup_stack (void **esp)
 static bool
 install_page (void *upage, void *kpage, bool writable)
 {
-#ifdef VM
-  return page_install(upage, kpage, writable);
-#else
   struct thread *t = thread_current ();
 
   /* Verify that there's not already a page at that virtual
      address, then map our page there. */
   return (pagedir_get_page (t->pagedir, upage) == NULL
           && pagedir_set_page (t->pagedir, upage, kpage, writable));
-#endif
 }

@@ -36,7 +36,6 @@ bool page_create(void);
 void page_destroy(void);
 bool page_install(void *upage, void *kpage, bool writable);
 void page_remove(struct page *page);
-struct page *page_lookup(const void *vaddr);
 void page_swap_in(struct page *page, void *frame);
 void page_swap_out(struct page *page, uint32_t *pagedir, slot_t slot);
 bool page_map(void *upage,
@@ -45,6 +44,7 @@ bool page_map(void *upage,
               uint32_t bytes,
               bool writable);
 void page_drop(struct page *page, uint32_t *pagedir);
+struct page *page_lookup(const void *vaddr);
 
 extern struct lock page_global_lock;
 

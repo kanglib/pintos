@@ -439,9 +439,7 @@ static void grow_stack(const void *vaddr, unsigned size, const void *esp)
         if (~pt[pt_no(vaddr)] & PTE_W)
           handle_exit(-1);
       } else {
-        lock_acquire(&page_global_lock);
         page_install(p, frame_alloc(true), true);
-        lock_release(&page_global_lock);
       }
     }
   } else {

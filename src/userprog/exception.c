@@ -7,6 +7,7 @@
 #ifdef VM
 #include <string.h>
 #include "threads/vaddr.h"
+#include "userprog/syscall.h"
 #include "vm/frame.h"
 #include "vm/page.h"
 #include "vm/swap.h"
@@ -175,14 +176,15 @@ page_fault (struct intr_frame *f)
     }
     if (page->status == PAGE_SWAPPED) {
       frame = frame_alloc(false);
-      swap_read_intr(page->mapping.slot, frame);
-      swap_free(page->mapping.slot);
+      swap_free(page->mapping.slot, frame);
     } else {
       uint32_t bytes = page->load_info.bytes;
       if (bytes) {
         frame = frame_alloc(false);
+        lock_acquire(&fs_lock);
         file_seek(page->load_info.file, page->load_info.offset);
         file_read(page->load_info.file, frame, bytes);
+        lock_release(&fs_lock);
         memset(frame + bytes, 0, PGSIZE - bytes);
       } else {
         frame = frame_alloc(true);
