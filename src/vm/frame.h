@@ -23,4 +23,6 @@ void *frame_alloc(bool zero);
 void frame_free(void *frame);
 void frame_set_page(void *frame, struct page *page);
 
+extern struct lock eviction_lock;
+
 #endif /* vm/frame.h */

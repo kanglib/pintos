@@ -74,21 +74,11 @@ void page_swap_in(struct page *page, void *frame)
   lock_acquire(&curr->page_table_lock);
   page->status = PAGE_PRESENT;
   page->mapping.frame = frame;
+  frame_set_page(frame, page);
   pagedir_set_page(thread_current()->pagedir,
                    page->vaddr,
                    frame,
                    page->is_writable);
-  frame_set_page(frame, page);
-  lock_release(&curr->page_table_lock);
-}
-
-void page_swap_out(struct page *page, uint32_t *pagedir, slot_t slot)
-{
-  struct thread *curr = thread_current();
-  lock_acquire(&curr->page_table_lock);
-  pagedir_clear_page(pagedir, page->vaddr);
-  page->status = PAGE_SWAPPED;
-  page->mapping.slot = slot;
   lock_release(&curr->page_table_lock);
 }
 
@@ -122,15 +112,6 @@ bool page_map(void *upage,
 
   lock_release(&curr->page_table_lock);
   return false;
-}
-
-void page_drop(struct page *page, uint32_t *pagedir)
-{
-  struct thread *curr = thread_current();
-  lock_acquire(&curr->page_table_lock);
-  pagedir_clear_page(pagedir, page->vaddr);
-  page->status = PAGE_LOADING;
-  lock_release(&curr->page_table_lock);
 }
 
 struct page *page_lookup(const void *vaddr)

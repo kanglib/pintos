@@ -592,7 +592,9 @@ setup_stack (void **esp)
   bool success = false;
 
 #ifdef VM
+  lock_release(&fs_lock);
   kpage = frame_alloc(true);
+  lock_acquire(&fs_lock);
 #else
   kpage = palloc_get_page (PAL_USER | PAL_ZERO);
 #endif

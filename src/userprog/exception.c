@@ -171,6 +171,7 @@ page_fault (struct intr_frame *f)
         kill(f);
       }
     }
+    lock_acquire(&eviction_lock);
     if (page->status == PAGE_SWAPPED) {
       frame = frame_alloc(false);
       swap_free(page->mapping.slot, frame);
@@ -188,6 +189,7 @@ page_fault (struct intr_frame *f)
       }
     }
     page_swap_in(page, frame);
+    lock_release(&eviction_lock);
   } else {
     kill(f);
   }

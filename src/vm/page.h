@@ -37,13 +37,11 @@ void page_destroy(void);
 bool page_install(void *upage, void *kpage, bool writable);
 void page_remove(struct page *page);
 void page_swap_in(struct page *page, void *frame);
-void page_swap_out(struct page *page, uint32_t *pagedir, slot_t slot);
 bool page_map(void *upage,
               struct file *file,
               off_t offset,
               uint32_t bytes,
               bool writable);
-void page_drop(struct page *page, uint32_t *pagedir);
 struct page *page_lookup(const void *vaddr);
 
 #endif /* vm/page.h */

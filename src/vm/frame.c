@@ -15,6 +15,8 @@ static bool frame_less(const struct hash_elem *a_,
                        const struct hash_elem *b_,
                        void *aux UNUSED);
 
+struct lock eviction_lock;
+
 static struct hash frame_table;
 static struct hash_iterator frame_table_iter;
 static struct lock frame_table_lock;
@@ -22,6 +24,8 @@ static size_t frame_count;
 
 void frame_init(void)
 {
+  lock_init(&eviction_lock);
+
   hash_init(&frame_table, frame_hash, frame_less, NULL);
   for (;;) {
     uintptr_t paddr;
@@ -46,6 +50,8 @@ void frame_init(void)
 void *frame_alloc(bool zero)
 {
   struct frame *f = NULL;
+  struct thread *curr;
+  bool flag;
   size_t i;
 
   lock_acquire(&frame_table_lock);
@@ -68,13 +74,23 @@ void *frame_alloc(bool zero)
       hash_first(&frame_table_iter, &frame_table);
       hash_next(&frame_table_iter);
     }
+    if (!f->page)
+      continue;
     if (pagedir_is_accessed(f->pagedir, f->page->vaddr))
       pagedir_set_accessed(f->pagedir, f->page->vaddr, false);
     else
       break;
   }
 
+  flag = lock_held_by_current_thread(&eviction_lock);
+  if (!flag)
+    lock_acquire(&eviction_lock);
+
+  curr = thread_current();
+  lock_acquire(&curr->page_table_lock);
   if (f->page->load_info.file && f->page->load_info.bytes) {
+    f->page->status = PAGE_LOADING;
+    pagedir_clear_page(f->pagedir, f->page->vaddr);
     if (pagedir_is_dirty(f->pagedir, f->page->vaddr)) {
       bool flag = lock_held_by_current_thread(&fs_lock);
       if (!flag)
@@ -86,12 +102,18 @@ void *frame_alloc(bool zero)
       if (!flag)
         lock_release(&fs_lock);
     }
-    page_drop(f->page, f->pagedir);
   } else {
-    page_swap_out(f->page, f->pagedir, swap_alloc((void *) f->paddr));
+    f->page->status = PAGE_SWAPPED;
+    pagedir_clear_page(f->pagedir, f->page->vaddr);
+    f->page->mapping.slot = swap_alloc((void *) f->paddr);
   }
+  lock_release(&curr->page_table_lock);
+
+  if (!flag)
+    lock_release(&eviction_lock);
 
 done:
+  f->page = NULL;
   lock_release(&frame_table_lock);
 
   if (zero)
