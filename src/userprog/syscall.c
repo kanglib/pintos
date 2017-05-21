@@ -3,15 +3,12 @@
 #include <syscall-nr.h>
 #include "threads/interrupt.h"
 #include "threads/thread.h"
-#include <list.h>
-#include <string.h>
 #include "devices/input.h"
 #include "threads/init.h"
 #include "threads/malloc.h"
 #include "threads/pte.h"
 #include "userprog/pagedir.h"
 #include "userprog/process.h"
-#include "filesys/file.h"
 #include "filesys/filesys.h"
 #ifdef VM
 #include "vm/frame.h"

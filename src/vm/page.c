@@ -1,20 +1,14 @@
 #include "vm/page.h"
-#include <debug.h>
 #include "threads/malloc.h"
-#include "threads/pte.h"
-#include "threads/synch.h"
 #include "threads/thread.h"
 #include "userprog/pagedir.h"
 #include "vm/frame.h"
-#include "vm/swap.h"
 
 static unsigned page_hash(const struct hash_elem *p_, void *aux UNUSED);
 static bool page_less(const struct hash_elem *a_,
                       const struct hash_elem *b_,
                       void *aux UNUSED);
 static void page_free(struct hash_elem *e, void *aux UNUSED);
-
-struct lock page_global_lock;
 
 bool page_create(void)
 {
@@ -90,9 +84,12 @@ void page_swap_in(struct page *page, void *frame)
 
 void page_swap_out(struct page *page, uint32_t *pagedir, slot_t slot)
 {
+  struct thread *curr = thread_current();
+  lock_acquire(&curr->page_table_lock);
   pagedir_clear_page(pagedir, page->vaddr);
   page->status = PAGE_SWAPPED;
   page->mapping.slot = slot;
+  lock_release(&curr->page_table_lock);
 }
 
 bool page_map(void *upage,

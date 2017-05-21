@@ -592,7 +592,6 @@ setup_stack (void **esp)
   bool success = false;
 
 #ifdef VM
-  lock_acquire(&page_global_lock);
   kpage = frame_alloc(true);
 #else
   kpage = palloc_get_page (PAL_USER | PAL_ZERO);
@@ -609,9 +608,6 @@ setup_stack (void **esp)
       else
         palloc_free_page (kpage);
     }
-#ifdef VM
-  lock_release(&page_global_lock);
-#endif
   return success;
 }
 

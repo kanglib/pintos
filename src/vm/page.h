@@ -46,6 +46,4 @@ bool page_map(void *upage,
 void page_drop(struct page *page, uint32_t *pagedir);
 struct page *page_lookup(const void *vaddr);
 
-extern struct lock page_global_lock;
-
 #endif /* vm/page.h */

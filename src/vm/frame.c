@@ -2,7 +2,6 @@
 #include <string.h>
 #include "threads/malloc.h"
 #include "threads/palloc.h"
-#include "threads/synch.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 #include "userprog/pagedir.h"
@@ -47,8 +46,6 @@ void frame_init(void)
 void *frame_alloc(bool zero)
 {
   struct frame *f = NULL;
-  struct thread *curr;
-  slot_t slot;
   size_t i;
 
   lock_acquire(&frame_table_lock);
@@ -79,22 +76,20 @@ void *frame_alloc(bool zero)
 
   if (f->page->load_info.file && f->page->load_info.bytes) {
     if (pagedir_is_dirty(f->pagedir, f->page->vaddr)) {
-      lock_acquire(&fs_lock);
+      bool flag = lock_held_by_current_thread(&fs_lock);
+      if (!flag)
+        lock_acquire(&fs_lock);
       file_seek(f->page->load_info.file, f->page->load_info.offset);
       file_write(f->page->load_info.file,
                  (void *) f->paddr,
                  f->page->load_info.bytes);
-      lock_release(&fs_lock);
+      if (!flag)
+        lock_release(&fs_lock);
     }
     page_drop(f->page, f->pagedir);
-    goto done;
+  } else {
+    page_swap_out(f->page, f->pagedir, swap_alloc((void *) f->paddr));
   }
-
-  curr = thread_current();
-  lock_acquire(&curr->page_table_lock);
-  slot = swap_alloc((void *) f->paddr);
-  page_swap_out(f->page, f->pagedir, slot);
-  lock_release(&curr->page_table_lock);
 
 done:
   lock_release(&frame_table_lock);

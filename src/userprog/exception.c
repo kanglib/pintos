@@ -162,15 +162,12 @@ page_fault (struct intr_frame *f)
     struct page *page;
     void *frame;
 
-    lock_acquire(&page_global_lock);
     if ((page = page_lookup(pg_round_down(fault_addr))) == NULL) {
       if (fault_addr >= f->esp - 32
           && fault_addr >= PHYS_BASE - USER_STACK_LIMIT) {
         page_install(pg_round_down(fault_addr), frame_alloc(true), true);
-        lock_release(&page_global_lock);
         return;
       } else {
-        lock_release(&page_global_lock);
         kill(f);
       }
     }
@@ -191,7 +188,6 @@ page_fault (struct intr_frame *f)
       }
     }
     page_swap_in(page, frame);
-    lock_release(&page_global_lock);
   } else {
     kill(f);
   }
