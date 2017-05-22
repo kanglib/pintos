@@ -349,15 +349,22 @@ static mapid_t handle_mmap(int fd, void *addr)
   if (fd >= t->file_n)
     handle_exit(-1);
 
-  if ((f = t->file[fd]))
-    return mmap_map(f, addr);
-  else
+  if ((f = t->file[fd])) {
+    mapid_t map;
+    lock_acquire(&page_global_lock);
+    map = mmap_map(f, addr);
+    lock_release(&page_global_lock);
+    return map;
+  } else {
     return -1;
+  }
 }
 
 static void handle_munmap(mapid_t mapping)
 {
+  lock_acquire(&page_global_lock);
   mmap_unmap(mapping);
+  lock_release(&page_global_lock);
 }
 #endif
 
@@ -370,15 +377,24 @@ static bool is_valid_vaddr(const void *vaddr, unsigned size)
   if (!vaddr || !is_user_vaddr(vaddr + size - 1))
     return false;
 
+#ifdef VM
+  lock_acquire(&page_global_lock);
+#endif
   start = pg_round_down(vaddr);
   end = pg_round_up(vaddr + size);
-  for (p = start; p < end; p += PGSIZE)
+  for (p = start; p < end; p += PGSIZE) {
 #ifdef VM
-    if (!page_lookup(p))
+    if (!page_lookup(p)) {
+      lock_release(&page_global_lock);
 #else
-    if (!pagedir_get_page(thread_current()->pagedir, p))
+    if (!pagedir_get_page(thread_current()->pagedir, p)) {
 #endif
       return false;
+    }
+  }
+#ifdef VM
+  lock_release(&page_global_lock);
+#endif
   return true;
 }
 
@@ -392,18 +408,26 @@ static bool is_writable_vaddr(const void *vaddr, unsigned size)
   if (!vaddr || !is_user_vaddr(vaddr + size - 1))
     return false;
 
+#ifdef VM
+  lock_acquire(&page_global_lock);
+#endif
   pd = thread_current()->pagedir;
   start = pg_round_down(vaddr);
   end = pg_round_up(vaddr + size);
   for (p = start; p < end; p += PGSIZE) {
 #ifdef VM
-    if (!page_lookup(p)->is_writable)
+    if (!page_lookup(p)->is_writable) {
+      lock_release(&page_global_lock);
 #else
     uint32_t *pt = pde_get_pt(pd[pd_no(vaddr)]);
-    if (~pt[pt_no(vaddr)] & PTE_W)
+    if (~pt[pt_no(vaddr)] & PTE_W) {
 #endif
       return false;
+    }
   }
+#ifdef VM
+  lock_release(&page_global_lock);
+#endif
   return true;
 }
 
@@ -427,6 +451,7 @@ static void grow_stack(const void *vaddr, unsigned size, const void *esp)
     void *end;
     void *p;
 
+    lock_acquire(&page_global_lock);
     start = pg_round_down(vaddr);
     end = pg_round_up(vaddr + size);
     for (p = start; p < end; p += PGSIZE) {
@@ -439,6 +464,7 @@ static void grow_stack(const void *vaddr, unsigned size, const void *esp)
         page_install(p, frame_alloc(true), true);
       }
     }
+    lock_release(&page_global_lock);
   } else {
     if (!is_valid_vaddr(vaddr, size) || !is_writable_vaddr(vaddr, size))
       handle_exit(-1);

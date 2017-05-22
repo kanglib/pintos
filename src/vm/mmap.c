@@ -1,7 +1,5 @@
 #include "vm/mmap.h"
-#include <debug.h>
 #include "threads/malloc.h"
-#include "threads/pte.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 #include "userprog/pagedir.h"
@@ -42,23 +40,21 @@ mapid_t mmap_map(struct file *file, void *addr)
   file = file_reopen(file);
   off = file_length(file);
   lock_release(&fs_lock);
+
   end = pg_round_up(addr + off);
   for (p = addr; p < end; p += PGSIZE)
     if (page_lookup(p))
       return -1;
-
-  if ((m = malloc(sizeof(struct mmap))) == NULL)
-    return -1;
 
   curr = thread_current();
   bytes = off;
   off = 0;
   for (p = addr; p < end; p += PGSIZE) {
     if (!page_map(p, file, off, (bytes >= PGSIZE) ? PGSIZE : bytes, true)) {
-      free(m);
       lock_acquire(&fs_lock);
       file_close(file);
       lock_release(&fs_lock);
+
       curr->exit_code = -1;
       thread_exit();
     }
@@ -66,6 +62,8 @@ mapid_t mmap_map(struct file *file, void *addr)
     bytes -= PGSIZE;
   }
 
+  if ((m = malloc(sizeof(struct mmap))) == NULL)
+    return -1;
   m->mapid = curr->mmap_n++;
   m->file = file;
   m->start = addr;
@@ -77,7 +75,6 @@ mapid_t mmap_map(struct file *file, void *addr)
 void mmap_unmap(mapid_t mapping)
 {
   struct mmap *m;
-
   if ((m = mmap_lookup(mapping))) {
     hash_delete(&thread_current()->mmap_table, &m->elem);
     mmap_remove(m);
@@ -93,7 +90,6 @@ static void mmap_remove(struct mmap *mmap)
   for (p = mmap->start; p < mmap->end; p += PGSIZE) {
     struct page *page;
 
-    lock_acquire(&curr->page_table_lock);
     page = page_lookup(p);
     if (page->status == PAGE_PRESENT) {
       if (pagedir_is_dirty(curr->pagedir, p)) {
@@ -109,7 +105,6 @@ static void mmap_remove(struct mmap *mmap)
 
     hash_delete(&curr->page_table, &page->elem);
     page_remove(page);
-    lock_release(&curr->page_table_lock);
   }
 
   lock_acquire(&fs_lock);

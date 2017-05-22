@@ -3,6 +3,7 @@
 
 #include <stddef.h>
 
+/* Swap slot number type. */
 typedef size_t slot_t;
 
 void swap_init(void);

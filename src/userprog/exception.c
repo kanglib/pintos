@@ -162,34 +162,34 @@ page_fault (struct intr_frame *f)
     struct page *page;
     void *frame;
 
+    lock_acquire(&page_global_lock);
     if ((page = page_lookup(pg_round_down(fault_addr))) == NULL) {
       if (fault_addr >= f->esp - 32
           && fault_addr >= PHYS_BASE - USER_STACK_LIMIT) {
         page_install(pg_round_down(fault_addr), frame_alloc(true), true);
-        return;
       } else {
         kill(f);
       }
-    }
-    lock_acquire(&eviction_lock);
-    if (page->status == PAGE_SWAPPED) {
-      frame = frame_alloc(false);
-      swap_free(page->mapping.slot, frame);
     } else {
-      uint32_t bytes = page->load_info.bytes;
-      if (bytes) {
+      if (page->status == PAGE_SWAPPED) {
         frame = frame_alloc(false);
-        lock_acquire(&fs_lock);
-        file_seek(page->load_info.file, page->load_info.offset);
-        file_read(page->load_info.file, frame, bytes);
-        lock_release(&fs_lock);
-        memset(frame + bytes, 0, PGSIZE - bytes);
+        swap_free(page->mapping.slot, frame);
       } else {
-        frame = frame_alloc(true);
+        uint32_t bytes = page->load_info.bytes;
+        if (bytes) {
+          frame = frame_alloc(false);
+          lock_acquire(&fs_lock);
+          file_seek(page->load_info.file, page->load_info.offset);
+          file_read(page->load_info.file, frame, bytes);
+          lock_release(&fs_lock);
+          memset(frame + bytes, 0, PGSIZE - bytes);
+        } else {
+          frame = frame_alloc(true);
+        }
       }
+      page_swap_in(page, frame);
     }
-    page_swap_in(page, frame);
-    lock_release(&eviction_lock);
+    lock_release(&page_global_lock);
   } else {
     kill(f);
   }

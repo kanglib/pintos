@@ -4,6 +4,8 @@
 #include "userprog/pagedir.h"
 #include "vm/frame.h"
 
+struct lock page_global_lock;
+
 static unsigned page_hash(const struct hash_elem *p_, void *aux UNUSED);
 static bool page_less(const struct hash_elem *a_,
                       const struct hash_elem *b_,
@@ -12,29 +14,21 @@ static void page_free(struct hash_elem *e, void *aux UNUSED);
 
 bool page_create(void)
 {
-  struct thread *curr = thread_current();
-  lock_init(&curr->page_table_lock);
-  return hash_init(&curr->page_table, page_hash, page_less, NULL);
+  return hash_init(&thread_current()->page_table, page_hash, page_less, NULL);
 }
 
 void page_destroy(void)
 {
-  struct thread *curr = thread_current();
-  lock_acquire(&curr->page_table_lock);
-  hash_destroy(&curr->page_table, page_free);
-  lock_release(&curr->page_table_lock);
+  hash_destroy(&thread_current()->page_table, page_free);
 }
 
 bool page_install(void *upage, void *kpage, bool writable)
 {
-  struct thread *curr;
-
-  curr = thread_current();
-  lock_acquire(&curr->page_table_lock);
-
   if (!page_lookup(upage)) {
+    struct thread *curr;
     struct page *p;
 
+    curr = thread_current();
     if ((p = malloc(sizeof(struct page))) == NULL)
       return false;
     p->status = PAGE_PRESENT;
@@ -50,12 +44,8 @@ bool page_install(void *upage, void *kpage, bool writable)
       return false;
     }
     frame_set_page(kpage, p);
-
-    lock_release(&curr->page_table_lock);
     return true;
   }
-
-  lock_release(&curr->page_table_lock);
   return false;
 }
 
@@ -70,16 +60,13 @@ void page_remove(struct page *page)
 
 void page_swap_in(struct page *page, void *frame)
 {
-  struct thread *curr = thread_current();
-  lock_acquire(&curr->page_table_lock);
   page->status = PAGE_PRESENT;
   page->mapping.frame = frame;
-  frame_set_page(frame, page);
   pagedir_set_page(thread_current()->pagedir,
                    page->vaddr,
                    frame,
                    page->is_writable);
-  lock_release(&curr->page_table_lock);
+  frame_set_page(frame, page);
 }
 
 bool page_map(void *upage,
@@ -88,14 +75,12 @@ bool page_map(void *upage,
               uint32_t bytes,
               bool writable)
 {
-  struct thread *curr;
-
-  curr = thread_current();
-  lock_acquire(&curr->page_table_lock);
 
   if (!page_lookup(upage)) {
+    struct thread *curr;
     struct page *p;
 
+    curr = thread_current();
     if ((p = malloc(sizeof(struct page))) == NULL)
       return false;
     p->status = PAGE_LOADING;
@@ -105,12 +90,8 @@ bool page_map(void *upage,
     p->load_info.bytes = bytes;
     p->is_writable = writable;
     hash_insert(&thread_current()->page_table, &p->elem);
-
-    lock_release(&curr->page_table_lock);
     return true;
   }
-
-  lock_release(&curr->page_table_lock);
   return false;
 }
 

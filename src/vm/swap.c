@@ -14,7 +14,6 @@ static struct lock swap_lock;
 void swap_init(void)
 {
   size_t swap_cnt = 0;
-
   if ((swap_disk = disk_get(1, 1)))
     swap_cnt = disk_size(swap_disk) / SLOT_SIZE;
   swap_table = bitmap_create(swap_cnt);

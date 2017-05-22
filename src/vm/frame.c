@@ -15,8 +15,6 @@ static bool frame_less(const struct hash_elem *a_,
                        const struct hash_elem *b_,
                        void *aux UNUSED);
 
-struct lock eviction_lock;
-
 static struct hash frame_table;
 static struct hash_iterator frame_table_iter;
 static struct lock frame_table_lock;
@@ -24,8 +22,6 @@ static size_t frame_count;
 
 void frame_init(void)
 {
-  lock_init(&eviction_lock);
-
   hash_init(&frame_table, frame_hash, frame_less, NULL);
   for (;;) {
     uintptr_t paddr;
@@ -36,8 +32,8 @@ void frame_init(void)
     f = malloc(sizeof(struct frame));
     f->status = FRAME_FREE;
     f->paddr = paddr;
-    f->pagedir = NULL;
     f->page = NULL;
+    f->pagedir = NULL;
     hash_insert(&frame_table, &f->elem);
     frame_count++;
   }
@@ -50,8 +46,6 @@ void frame_init(void)
 void *frame_alloc(bool zero)
 {
   struct frame *f = NULL;
-  struct thread *curr;
-  bool flag;
   size_t i;
 
   lock_acquire(&frame_table_lock);
@@ -82,12 +76,6 @@ void *frame_alloc(bool zero)
       break;
   }
 
-  flag = lock_held_by_current_thread(&eviction_lock);
-  if (!flag)
-    lock_acquire(&eviction_lock);
-
-  curr = thread_current();
-  lock_acquire(&curr->page_table_lock);
   if (f->page->load_info.file && f->page->load_info.bytes) {
     f->page->status = PAGE_LOADING;
     pagedir_clear_page(f->pagedir, f->page->vaddr);
@@ -107,10 +95,6 @@ void *frame_alloc(bool zero)
     pagedir_clear_page(f->pagedir, f->page->vaddr);
     f->page->mapping.slot = swap_alloc((void *) f->paddr);
   }
-  lock_release(&curr->page_table_lock);
-
-  if (!flag)
-    lock_release(&eviction_lock);
 
 done:
   f->page = NULL;
@@ -135,8 +119,8 @@ void frame_set_page(void *frame, struct page *page)
   struct frame *f;
   lock_acquire(&frame_table_lock);
   if ((f = frame_lookup((uintptr_t) frame))) {
-    f->pagedir = thread_current()->pagedir;
     f->page = page;
+    f->pagedir = thread_current()->pagedir;
   }
   lock_release(&frame_table_lock);
 }

@@ -193,7 +193,10 @@ process_exit (void)
   }
 
 #ifdef VM
+  if (!lock_held_by_current_thread(&page_global_lock))
+    lock_acquire(&page_global_lock);
   mmap_destroy();
+  lock_release(&page_global_lock);
 #endif
 
   lock_acquire(&fs_lock);
@@ -203,7 +206,9 @@ process_exit (void)
   lock_release(&fs_lock);
 
 #ifdef VM
+  lock_acquire(&page_global_lock);
   page_destroy();
+  lock_release(&page_global_lock);
 #endif
 
   /* Destroy the current process's page directory and switch back
@@ -550,8 +555,12 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
 #ifdef VM
-      if (!page_map(upage, file, ofs, page_read_bytes, writable))
+      lock_acquire(&page_global_lock);
+      if (!page_map(upage, file, ofs, page_read_bytes, writable)) {
+        lock_release(&page_global_lock);
         return false;
+      }
+      lock_release(&page_global_lock);
       ofs += page_read_bytes;
 #else
       /* Get a page of memory. */
@@ -592,16 +601,18 @@ setup_stack (void **esp)
   bool success = false;
 
 #ifdef VM
-  lock_release(&fs_lock);
+  lock_acquire(&page_global_lock);
   kpage = frame_alloc(true);
-  lock_acquire(&fs_lock);
+  lock_release(&page_global_lock);
 #else
   kpage = palloc_get_page (PAL_USER | PAL_ZERO);
 #endif
   if (kpage != NULL) 
     {
 #ifdef VM
+      lock_acquire(&page_global_lock);
       success = page_install(PHYS_BASE - PGSIZE, kpage, true);
+      lock_release(&page_global_lock);
 #else
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
 #endif

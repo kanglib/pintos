@@ -148,7 +148,6 @@ struct thread
 #ifdef VM
     /* Owned by vm/page.c. */
     struct hash page_table;             /* Supplemental page table. */
-    struct lock page_table_lock;        /* Synchronization. */
 
     /* Owned by vm/mmap.c. */
     struct hash mmap_table;             /* Map region table. */
