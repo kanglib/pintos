@@ -154,6 +154,11 @@ struct thread
     mapid_t mmap_n;                     /* Maximum used mapids. */
 #endif
 
+#ifdef FILESYS
+    /* Owned by filesys/filesys.c. */
+    struct dir *pwd;
+#endif
+
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
   };

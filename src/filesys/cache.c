@@ -30,7 +30,7 @@ void cache_init(void)
   lock_init(&cache_lock);
   list_init(&read_ahead_queue);
   thread_create("write_behind", PRI_MAX, write_behind_thread, NULL);
-  thread_create("read_ahead", PRI_MAX, read_ahead_thread, NULL);
+  thread_create("read_ahead", PRI_DEFAULT, read_ahead_thread, NULL);
 }
 
 void cache_read(disk_sector_t sector_idx,
@@ -42,9 +42,11 @@ void cache_read(disk_sector_t sector_idx,
 
   lock_acquire(&cache_lock);
   struct line *line = cache_load_line(sector_idx);
-  struct read_ahead_job *job = malloc(sizeof(struct read_ahead_job));
-  job->sector_idx = sector_idx + 1;
-  list_push_front(&read_ahead_queue, &job->elem);
+  if (sector_idx < disk_size(filesys_disk) - 1) {
+    struct read_ahead_job *job = malloc(sizeof(struct read_ahead_job));
+    job->sector_idx = sector_idx + 1;
+    list_push_front(&read_ahead_queue, &job->elem);
+  }
   line->flags |= FILESYS_CACHE_A;
   memcpy(buffer, &line->buffer[sector_ofs], chunk_size);
   lock_release(&cache_lock);
@@ -59,9 +61,11 @@ void cache_write(disk_sector_t sector_idx,
 
   lock_acquire(&cache_lock);
   struct line *line = cache_load_line(sector_idx);
-  struct read_ahead_job *job = malloc(sizeof(struct read_ahead_job));
-  job->sector_idx = sector_idx + 1;
-  list_push_front(&read_ahead_queue, &job->elem);
+  if (sector_idx < disk_size(filesys_disk) - 1) {
+    struct read_ahead_job *job = malloc(sizeof(struct read_ahead_job));
+    job->sector_idx = sector_idx + 1;
+    list_push_front(&read_ahead_queue, &job->elem);
+  }
   line->flags |= FILESYS_CACHE_A | FILESYS_CACHE_D;
   memcpy(&line->buffer[sector_ofs], buffer, chunk_size);
   lock_release(&cache_lock);

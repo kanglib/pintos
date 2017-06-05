@@ -1,14 +1,17 @@
 #include "filesys/file.h"
 #include <debug.h>
 #include "filesys/inode.h"
+#include "filesys/directory.h"
 #include "threads/malloc.h"
 
 /* An open file. */
 struct file 
   {
+    enum file_type type;        /* File type. */
     struct inode *inode;        /* File's inode. */
     off_t pos;                  /* Current position. */
     bool deny_write;            /* Has file_deny_write() been called? */
+    struct dir *dir;            /* Used for directories. */
   };
 
 /* Opens a file for the given INODE, of which it takes ownership,
@@ -20,6 +23,7 @@ file_open (struct inode *inode)
   struct file *file = calloc (1, sizeof *file);
   if (inode != NULL && file != NULL)
     {
+      file->type = inode_get_type(inode);
       file->inode = inode;
       file->pos = 0;
       file->deny_write = false;
@@ -47,6 +51,7 @@ file_close (struct file *file)
 {
   if (file != NULL)
     {
+      dir_close(file->dir);
       file_allow_write (file);
       inode_close (file->inode);
       free (file); 
@@ -68,9 +73,13 @@ file_get_inode (struct file *file)
 off_t
 file_read (struct file *file, void *buffer, off_t size) 
 {
-  off_t bytes_read = inode_read_at (file->inode, buffer, size, file->pos);
-  file->pos += bytes_read;
-  return bytes_read;
+  if (file->type == FILE_TYPE_REGULAR) {
+    off_t bytes_read = inode_read_at(file->inode, buffer, size, file->pos);
+    file->pos += bytes_read;
+    return bytes_read;
+  } else {
+    return -1;
+  }
 }
 
 /* Reads SIZE bytes from FILE into BUFFER,
@@ -94,9 +103,13 @@ file_read_at (struct file *file, void *buffer, off_t size, off_t file_ofs)
 off_t
 file_write (struct file *file, const void *buffer, off_t size) 
 {
-  off_t bytes_written = inode_write_at (file->inode, buffer, size, file->pos);
-  file->pos += bytes_written;
-  return bytes_written;
+  if (file->type == FILE_TYPE_REGULAR) {
+    off_t bytes_written = inode_write_at(file->inode, buffer, size, file->pos);
+    file->pos += bytes_written;
+    return bytes_written;
+  } else {
+    return -1;
+  }
 }
 
 /* Writes SIZE bytes from BUFFER into FILE,
@@ -145,7 +158,10 @@ off_t
 file_length (struct file *file) 
 {
   ASSERT (file != NULL);
-  return inode_length (file->inode);
+  if (file->type == FILE_TYPE_REGULAR)
+    return inode_length(file->inode);
+  else
+    return -1;
 }
 
 /* Sets the current position in FILE to NEW_POS bytes from the
@@ -155,7 +171,8 @@ file_seek (struct file *file, off_t new_pos)
 {
   ASSERT (file != NULL);
   ASSERT (new_pos >= 0);
-  file->pos = new_pos;
+  if (file->type == FILE_TYPE_REGULAR)
+    file->pos = new_pos;
 }
 
 /* Returns the current position in FILE as a byte offset from the
@@ -164,5 +181,23 @@ off_t
 file_tell (struct file *file) 
 {
   ASSERT (file != NULL);
-  return file->pos;
+  if (file->type == FILE_TYPE_REGULAR)
+    return file->pos;
+  else
+    return -1;
+}
+
+enum file_type file_get_type(struct file *file)
+{
+  ASSERT(file);
+  return file->type;
+}
+
+struct dir *file_get_dir(struct file *file)
+{
+  ASSERT(file);
+  ASSERT(file->type == FILE_TYPE_DIR);
+  if (!file->dir)
+    file->dir = dir_open(inode_reopen(file->inode));
+  return file->dir;
 }

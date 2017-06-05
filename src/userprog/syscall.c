@@ -1,6 +1,7 @@
 #include "userprog/syscall.h"
 #include <stdio.h>
 #include <syscall-nr.h>
+#include <string.h>
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 #include "devices/input.h"
@@ -14,6 +15,10 @@
 #include "vm/frame.h"
 #include "vm/mmap.h"
 #include "vm/page.h"
+#endif
+#ifdef FILESYS
+#include "filesys/directory.h"
+#include "filesys/inode.h"
 #endif
 
 /* Maximum number of system call arguments. */
@@ -36,6 +41,13 @@ static void handle_close(int fd);
 #ifdef VM
 static mapid_t handle_mmap(int fd, void *addr);
 static void handle_munmap(mapid_t mapping);
+#endif
+#ifdef FILESYS
+static bool handle_chdir(const char *dir);
+static bool handle_mkdir(const char *dir);
+static bool handle_readdir(int fd, char *name, const void *esp);
+static bool handle_isdir(int fd);
+static int handle_inumber(int fd);
 #endif
 
 static bool is_valid_vaddr(const void *vaddr, unsigned size);
@@ -124,6 +136,28 @@ static void syscall_handler(struct intr_frame *f)
     handle_munmap(args[0]);
     break;
 #endif
+#ifdef FILESYS
+  case SYS_CHDIR:
+    read_args(f->esp, args, 1);
+    f->eax = handle_chdir((void *) args[0]);
+    break;
+  case SYS_MKDIR:
+    read_args(f->esp, args, 1);
+    f->eax = handle_mkdir((void *) args[0]);
+    break;
+  case SYS_READDIR:
+    read_args(f->esp, args, 2);
+    f->eax = handle_readdir(args[0], (void *) args[1], f->esp);
+    break;
+  case SYS_ISDIR:
+    read_args(f->esp, args, 1);
+    f->eax = handle_isdir(args[0]);
+    break;
+  case SYS_INUMBER:
+    read_args(f->esp, args, 1);
+    f->eax = handle_inumber(args[0]);
+    break;
+#endif
   default:
     handle_exit(-1);
   }
@@ -160,6 +194,8 @@ static bool handle_create(const char *file, unsigned initial_size)
   if (!is_valid_vaddr(file, sizeof(char *)))
     handle_exit(-1);
 
+  if (file[strlen(file) - 1] == '/')
+    return false;
   lock_acquire(&fs_lock);
   success = filesys_create(file, initial_size);
   lock_release(&fs_lock);
@@ -350,14 +386,15 @@ static mapid_t handle_mmap(int fd, void *addr)
     handle_exit(-1);
 
   if ((f = t->file[fd])) {
-    mapid_t map;
-    lock_acquire(&page_global_lock);
-    map = mmap_map(f, addr);
-    lock_release(&page_global_lock);
-    return map;
-  } else {
-    return -1;
+    if (file_get_type(f) == FILE_TYPE_REGULAR) {
+      mapid_t map;
+      lock_acquire(&page_global_lock);
+      map = mmap_map(f, addr);
+      lock_release(&page_global_lock);
+      return map;
+    }
   }
+  return -1;
 }
 
 static void handle_munmap(mapid_t mapping)
@@ -365,6 +402,93 @@ static void handle_munmap(mapid_t mapping)
   lock_acquire(&page_global_lock);
   mmap_unmap(mapping);
   lock_release(&page_global_lock);
+}
+#endif
+
+#ifdef FILESYS
+static bool handle_chdir(const char *dir)
+{
+  if (!is_valid_vaddr(dir, sizeof(char *)))
+    handle_exit(-1);
+
+  struct file *file = filesys_open(dir);
+  if (file) {
+    if (file_get_type(file) == FILE_TYPE_DIR) {
+      struct thread *curr = thread_current();
+      dir_close(curr->pwd);
+      curr->pwd = dir_open(inode_reopen(file_get_inode(file)));
+      return true;
+    }
+    file_close(file);
+  }
+  return false;
+}
+
+static bool handle_mkdir(const char *dir)
+{
+  if (!is_valid_vaddr(dir, sizeof(char *)))
+    handle_exit(-1);
+
+  if (filesys_create(dir, 0)) {
+    struct file *file = filesys_open(dir);
+    if (file) {
+      struct inode *inode = file_get_inode(file);
+      inode_set_type(inode, FILE_TYPE_DIR);
+      inode_set_parent(inode, dir_get_inode(thread_current()->pwd));
+      file_close(file);
+      return true;
+    }
+    filesys_remove(dir);
+  }
+  return false;
+}
+
+static bool handle_readdir(int fd, char *name, const void *esp)
+{
+  struct thread *t;
+  struct file *f;
+
+  t = thread_current();
+#ifdef VM
+  if (fd >= t->file_n)
+    handle_exit(-1);
+  grow_stack(name, READDIR_MAX_LEN + 1, esp);
+#else
+  (void) esp;
+  if (fd >= t->file_n || !is_valid_vaddr(name, READDIR_MAX_LEN + 1))
+    handle_exit(-1);
+  if (!is_writable_vaddr(name, READDIR_MAX_LEN + 1))
+    handle_exit(-1);
+#endif
+
+  if ((f = t->file[fd])) {
+    if (file_get_type(f) == FILE_TYPE_DIR) {
+      return dir_readdir(file_get_dir(f), name);
+    }
+  }
+  handle_exit(-1);
+}
+
+static bool handle_isdir(int fd)
+{
+  struct thread *curr = thread_current();
+  if (fd < curr->file_n) {
+    struct file *file = curr->file[fd];
+    if (file)
+      return file_get_type(file) == FILE_TYPE_DIR;
+  }
+  handle_exit(-1);
+}
+
+static int handle_inumber(int fd)
+{
+  struct thread *curr = thread_current();
+  if (fd < curr->file_n) {
+    struct file *file = curr->file[fd];
+    if (file)
+      return inode_get_inumber(file_get_inode(file));
+  }
+  handle_exit(-1);
 }
 #endif
 

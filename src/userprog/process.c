@@ -37,6 +37,7 @@ process_execute (const char *file_name)
 {
   char *fn_copy;
   tid_t tid;
+  struct thread *curr;
   struct thread *t;
   struct child *c;
   char *name;
@@ -65,13 +66,18 @@ process_execute (const char *file_name)
     return TID_ERROR;
   }
 
+  curr = thread_current();
   t = thread_get_by_tid(tid);
+#ifdef FILESYS
+  t->pwd = dir_reopen(curr->pwd);
+#endif
+  sema_up(&t->sema2);
   sema_down(&t->sema1);
   if (t->is_failed) {
     sema_up(&t->sema2);
     return TID_ERROR;
   }
-  t->parent = thread_current();
+  t->parent = curr;
 
   c = malloc(sizeof(struct child));
   c->tid = tid;
@@ -100,6 +106,7 @@ start_process (void *f_name)
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
   t = thread_current();
+  sema_down(&t->sema2);
   lock_acquire(&fs_lock);
   success = load (file_name, &if_.eip, &if_.esp);
 
@@ -204,6 +211,9 @@ process_exit (void)
   for (i = 2; i < curr->file_n; i++)
     file_close(curr->file[i]);
   lock_release(&fs_lock);
+#ifdef FILESYS
+  dir_close(curr->pwd);
+#endif
 
 #ifdef VM
   lock_acquire(&page_global_lock);
@@ -474,7 +484,9 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
 /* load() helpers. */
 
+#ifndef VM
 static bool install_page (void *upage, void *kpage, bool writable);
+#endif
 
 /* Checks whether PHDR describes a valid, loadable segment in
    FILE and returns true if so, false otherwise. */
@@ -624,6 +636,7 @@ setup_stack (void **esp)
   return success;
 }
 
+#ifndef VM
 /* Adds a mapping from user virtual address UPAGE to kernel
    virtual address KPAGE to the page table.
    If WRITABLE is true, the user process may modify the page;
@@ -643,3 +656,4 @@ install_page (void *upage, void *kpage, bool writable)
   return (pagedir_get_page (t->pagedir, upage) == NULL
           && pagedir_set_page (t->pagedir, upage, kpage, writable));
 }
+#endif

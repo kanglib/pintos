@@ -5,12 +5,14 @@
 #include "filesys/filesys.h"
 #include "filesys/inode.h"
 #include "threads/malloc.h"
+#include "threads/thread.h"
 
 /* A directory. */
 struct dir 
   {
     struct inode *inode;                /* Backing store. */
     off_t pos;                          /* Current position. */
+    disk_sector_t parent;               /* Parent directory. */
   };
 
 /* A single directory entry. */
@@ -26,7 +28,16 @@ struct dir_entry
 bool
 dir_create (disk_sector_t sector, size_t entry_cnt) 
 {
-  return inode_create (sector, entry_cnt * sizeof (struct dir_entry));
+  if (inode_create(sector, entry_cnt * sizeof(struct dir_entry))) {
+    struct inode *inode = inode_open(sector);
+    if (inode) {
+      inode_set_type(inode, FILE_TYPE_DIR);
+      inode_set_parent(inode, inode);   /* HACK */
+      inode_close(inode);
+      return true;
+    }
+  }
+  return false;
 }
 
 /* Opens and returns the directory for the given INODE, of which
@@ -39,6 +50,7 @@ dir_open (struct inode *inode)
     {
       dir->inode = inode;
       dir->pos = 0;
+      dir->parent = inode_get_parent(inode);
       return dir;
     }
   else
@@ -233,4 +245,53 @@ dir_readdir (struct dir *dir, char name[NAME_MAX + 1])
         } 
     }
   return false;
+}
+
+struct dir *dir_open_path(const char *path_)
+{
+  size_t size = strlen(path_) + 1;
+  char *path = malloc(size);
+  strlcpy(path, path_, size);
+
+  struct dir *dir;
+  if (path[0] == '/')
+    dir = dir_open_root();
+  else
+    dir = dir_reopen(thread_current()->pwd);
+
+  char *token;
+  char *save_ptr;
+  for (token = strtok_r(path, "/", &save_ptr); token;
+      token = strtok_r(NULL, "/", &save_ptr)) {
+    if (!strcmp(token, "."))
+      continue;
+    if (!strcmp(token, "..")) {
+      struct inode *inode = inode_open(dir->parent);
+      if (inode) {
+        dir_close(dir);
+        dir = dir_open(inode);
+        continue;
+      }
+      dir_close(dir);
+      dir = NULL;
+      break;
+    }
+
+    struct dir_entry e;
+    if (lookup(dir, token, &e, NULL)) {
+      struct inode *inode = inode_open(e.inode_sector);
+      if (inode && inode_get_type(inode) == FILE_TYPE_DIR) {
+        dir_close(dir);
+        dir = dir_open(inode);
+        continue;
+      }
+      inode_close(inode);
+    }
+    dir_close(dir);
+    dir = NULL;
+    break;
+  }
+
+  free(path);
+  return dir;
 }

@@ -15,11 +15,12 @@
    Must be exactly DISK_SECTOR_SIZE bytes long. */
 struct inode_disk
   {
-    unsigned type;                      /* File type. */
+    enum file_type type;                /* File type. */
     off_t length;                       /* File size in bytes. */
+    disk_sector_t parent;               /* Parent directory pointer. */
     unsigned magic;                     /* Magic number. */
     disk_sector_t pointers[14];         /* Block pointers. */
-    uint32_t unused[111];               /* Not used. */
+    uint32_t unused[110];               /* Not used. */
   };
 
 /* Returns the number of sectors to allocate for an inode SIZE
@@ -517,4 +518,41 @@ inode_length (const struct inode *inode)
              offsetof(struct inode_disk, length),
              sizeof(off_t));
   return length;
+}
+
+enum file_type inode_get_type(const struct inode *inode)
+{
+  enum file_type type;
+  cache_read(inode->sector,
+             &type,
+             offsetof(struct inode_disk, type),
+             sizeof(enum file_type));
+  return type;
+}
+
+void inode_set_type(struct inode *inode, enum file_type type)
+{
+  cache_write(inode->sector,
+              &type,
+              offsetof(struct inode_disk, type),
+              sizeof(enum file_type));
+}
+
+disk_sector_t inode_get_parent(const struct inode *child)
+{
+  disk_sector_t parent;
+  cache_read(child->sector,
+             &parent,
+             offsetof(struct inode_disk, parent),
+             sizeof(disk_sector_t));
+  return parent;
+}
+
+void inode_set_parent(struct inode *child, const struct inode *parent)
+{
+  disk_sector_t pointer = parent->sector;
+  cache_write(child->sector,
+              &pointer,
+              offsetof(struct inode_disk, parent),
+              sizeof(disk_sector_t));
 }

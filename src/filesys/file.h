@@ -3,6 +3,11 @@
 
 #include "filesys/off_t.h"
 
+enum file_type {
+  FILE_TYPE_REGULAR,
+  FILE_TYPE_DIR,
+};
+
 struct inode;
 
 /* Opening and closing files. */
@@ -25,5 +30,8 @@ void file_allow_write (struct file *);
 void file_seek (struct file *, off_t);
 off_t file_tell (struct file *);
 off_t file_length (struct file *);
+
+enum file_type file_get_type(struct file *file);
+struct dir *file_get_dir(struct file *file);
 
 #endif /* filesys/file.h */
