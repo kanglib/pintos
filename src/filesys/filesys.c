@@ -33,7 +33,10 @@ filesys_init (bool format)
     do_format ();
 
   free_map_open ();
-  thread_current()->pwd = dir_open_root();
+
+  struct thread *curr = thread_current();
+  curr->pwd = dir_open_root();
+  inode_inc_pwd_cnt(dir_get_inode(curr->pwd));
 }
 
 /* Shuts down the file system module, writing any unwritten data
@@ -138,7 +141,7 @@ filesys_open (const char *name)
 
   struct inode *inode = NULL;
   if (dir != NULL)
-    dir_lookup (dir, file_name, &inode);
+    dir_lookup(dir, file_name, &inode);
   free(path);
   dir_close (dir);
 
@@ -157,8 +160,38 @@ filesys_open (const char *name)
 bool
 filesys_remove (const char *name) 
 {
-  struct dir *dir = dir_reopen(thread_current()->pwd);
-  bool success = dir != NULL && dir_remove (dir, name);
+  if (*name == '\0')
+    return NULL;
+  if (!strcmp(name, "/") || !strcmp(name, ".") || !strcmp(name, ".."))
+    return NULL;
+
+  size_t size = strlen(name) + 1;
+  char *path = malloc(size);
+  strlcpy(path, name, size);
+
+  if (path[size - 2] == '/')
+    path[size - 2] = '\0';
+  char *file_name = strrchr(path, '/');
+  if (file_name) {
+    *file_name++ = '\0';
+  } else {
+    free(path);
+    path = NULL;
+    file_name = (char *) name;
+  }
+
+  struct dir *dir;
+  if (path) {
+    if (*path)
+      dir = dir_open_path(path);
+    else
+      dir = dir_open_root();
+  } else {
+    dir = dir_reopen(thread_current()->pwd);
+  }
+
+  bool success = dir != NULL && dir_remove(dir, file_name);
+  free(path);
   dir_close (dir); 
 
   return success;

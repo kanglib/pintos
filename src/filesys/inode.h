@@ -24,5 +24,9 @@ enum file_type inode_get_type(const struct inode *inode);
 void inode_set_type(struct inode *inode, enum file_type type);
 disk_sector_t inode_get_parent(const struct inode *child);
 void inode_set_parent(struct inode *child, const struct inode *parent);
+bool inode_is_open(struct inode *inode);
+int inode_get_pwd_cnt(struct inode *inode);
+void inode_inc_pwd_cnt(struct inode *inode);
+void inode_dec_pwd_cnt(struct inode *inode);
 
 #endif /* filesys/inode.h */

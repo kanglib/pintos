@@ -39,6 +39,7 @@ struct inode
     int open_cnt;                       /* Number of openers. */
     bool removed;                       /* True if deleted, false otherwise. */
     int deny_write_cnt;                 /* 0: writes ok, >0: deny writes. */
+    int pwd_cnt;                        /* 0: remove ok, >0: deny remove. */
   };
 
 #define TABLE_SIZE (DISK_SECTOR_SIZE / (int) sizeof(disk_sector_t))
@@ -265,6 +266,7 @@ inode_open (disk_sector_t sector)
   inode->open_cnt = 1;
   inode->deny_write_cnt = 0;
   inode->removed = false;
+  inode->pwd_cnt = 0;
   return inode;
 }
 
@@ -555,4 +557,24 @@ void inode_set_parent(struct inode *child, const struct inode *parent)
               &pointer,
               offsetof(struct inode_disk, parent),
               sizeof(disk_sector_t));
+}
+
+bool inode_is_open(struct inode *inode)
+{
+  return inode->open_cnt != 1;
+}
+
+int inode_get_pwd_cnt(struct inode *inode)
+{
+  return inode->pwd_cnt;
+}
+
+void inode_inc_pwd_cnt(struct inode *inode)
+{
+  inode->pwd_cnt++;
+}
+
+void inode_dec_pwd_cnt(struct inode *inode)
+{
+  inode->pwd_cnt--;
 }

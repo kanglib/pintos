@@ -213,6 +213,17 @@ dir_remove (struct dir *dir, const char *name)
   if (inode == NULL)
     goto done;
 
+  if (inode_get_type(inode) == FILE_TYPE_DIR) {
+    if (inode_is_open(inode) || inode_get_pwd_cnt(inode))
+      goto done;
+    struct dir *child = dir_open(inode);
+    if (!child)
+      goto done;
+    char name[NAME_MAX + 1];
+    if (dir_readdir(child, name))
+      goto done;
+  }
+
   /* Erase directory entry. */
   e.in_use = false;
   if (inode_write_at (dir->inode, &e, sizeof e, ofs) != sizeof e) 

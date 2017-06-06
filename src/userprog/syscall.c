@@ -415,8 +415,10 @@ static bool handle_chdir(const char *dir)
   if (file) {
     if (file_get_type(file) == FILE_TYPE_DIR) {
       struct thread *curr = thread_current();
+      inode_dec_pwd_cnt(dir_get_inode(curr->pwd));
       dir_close(curr->pwd);
       curr->pwd = dir_open(inode_reopen(file_get_inode(file)));
+      inode_inc_pwd_cnt(dir_get_inode(curr->pwd));
       return true;
     }
     file_close(file);

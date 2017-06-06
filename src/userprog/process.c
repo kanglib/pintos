@@ -24,6 +24,9 @@
 #include "vm/mmap.h"
 #include "vm/page.h"
 #endif
+#ifdef FILESYS
+#include "filesys/inode.h"
+#endif
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
@@ -70,6 +73,7 @@ process_execute (const char *file_name)
   t = thread_get_by_tid(tid);
 #ifdef FILESYS
   t->pwd = dir_reopen(curr->pwd);
+  inode_inc_pwd_cnt(dir_get_inode(t->pwd));
 #endif
   sema_up(&t->sema2);
   sema_down(&t->sema1);
@@ -212,6 +216,7 @@ process_exit (void)
     file_close(curr->file[i]);
   lock_release(&fs_lock);
 #ifdef FILESYS
+  inode_dec_pwd_cnt(dir_get_inode(curr->pwd));
   dir_close(curr->pwd);
 #endif
 
