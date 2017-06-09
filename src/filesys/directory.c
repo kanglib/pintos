@@ -23,6 +23,8 @@ struct dir_entry
     bool in_use;                        /* In use or free? */
   };
 
+static struct dir *open_path_helper(const char *path_);
+
 /* Creates a directory with space for ENTRY_CNT entries in the
    given SECTOR.  Returns true if successful, false on failure. */
 bool
@@ -258,7 +260,40 @@ dir_readdir (struct dir *dir, char name[NAME_MAX + 1])
   return false;
 }
 
-struct dir *dir_open_path(const char *path_)
+bool dir_open_path(const char *path_, struct dir **dir, char *name)
+{
+  size_t size = strlen(path_) + 1;
+  char *path = malloc(size);
+  strlcpy(path, path_, size);
+
+  bool force_dir = path[size - 2] == '/';
+  if (force_dir)
+    path[size - 2] = '\0';
+  char *file_name = strrchr(path, '/');
+  if (file_name) {
+    *file_name++ = '\0';
+  } else {
+    free(path);
+    path = NULL;
+    file_name = (char *) path_;
+  }
+
+  if (path) {
+    if (*path)
+      *dir = open_path_helper(path);
+    else
+      *dir = dir_open_root();
+  } else {
+    *dir = dir_reopen(thread_current()->pwd);
+  }
+
+  if (*dir && strlen(file_name) <= NAME_MAX)
+    strlcpy(name, file_name, NAME_MAX + 1);
+  free(path);
+  return force_dir;
+}
+
+static struct dir *open_path_helper(const char *path_)
 {
   size_t size = strlen(path_) + 1;
   char *path = malloc(size);

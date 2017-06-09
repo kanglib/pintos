@@ -60,30 +60,9 @@ filesys_create (const char *name, off_t initial_size)
   if (!strcmp(name, "/") || !strcmp(name, ".") || !strcmp(name, ".."))
     return NULL;
 
-  size_t size = strlen(name) + 1;
-  char *path = malloc(size);
-  strlcpy(path, name, size);
-
-  if (path[size - 2] == '/')
-    path[size - 2] = '\0';
-  char *file_name = strrchr(path, '/');
-  if (file_name) {
-    *file_name++ = '\0';
-  } else {
-    free(path);
-    path = NULL;
-    file_name = (char *) name;
-  }
-
   struct dir *dir;
-  if (path) {
-    if (*path)
-      dir = dir_open_path(path);
-    else
-      dir = dir_open_root();
-  } else {
-    dir = dir_reopen(thread_current()->pwd);
-  }
+  char file_name[NAME_MAX + 1] = "";
+  dir_open_path(name, &dir, file_name);
 
   disk_sector_t inode_sector = 0;
   bool success = (dir != NULL
@@ -92,7 +71,6 @@ filesys_create (const char *name, off_t initial_size)
                   && dir_add(dir, file_name, inode_sector));
   if (!success && inode_sector != 0) 
     free_map_release (inode_sector, 1);
-  free(path);
   dir_close (dir);
 
   return success;
@@ -106,43 +84,23 @@ filesys_create (const char *name, off_t initial_size)
 struct file *
 filesys_open (const char *name)
 {
+  struct thread *curr = thread_current();
   if (*name == '\0')
     return NULL;
   if (!strcmp(name, "/"))
     return file_open(inode_open(ROOT_DIR_SECTOR));
   if (!strcmp(name, "."))
-    return file_open(inode_reopen(dir_get_inode(thread_current()->pwd)));
-
-  size_t size = strlen(name) + 1;
-  char *path = malloc(size);
-  strlcpy(path, name, size);
-
-  bool force_dir = path[size - 2] == '/';
-  if (force_dir)
-    path[size - 2] = '\0';
-  char *file_name = strrchr(path, '/');
-  if (file_name) {
-    *file_name++ = '\0';
-  } else {
-    free(path);
-    path = NULL;
-    file_name = (char *) name;
-  }
+    return file_open(inode_reopen(dir_get_inode(curr->pwd)));
+  if (!strcmp(name, ".."))
+    return file_open(inode_open(inode_get_parent(dir_get_inode(curr->pwd))));
 
   struct dir *dir;
-  if (path) {
-    if (*path)
-      dir = dir_open_path(path);
-    else
-      dir = dir_open_root();
-  } else {
-    dir = dir_reopen(thread_current()->pwd);
-  }
+  char file_name[NAME_MAX + 1] = "";
+  bool force_dir = dir_open_path(name, &dir, file_name);
 
   struct inode *inode = NULL;
   if (dir != NULL)
     dir_lookup(dir, file_name, &inode);
-  free(path);
   dir_close (dir);
 
   if (force_dir && inode_get_type(inode) != FILE_TYPE_DIR) {
@@ -165,33 +123,11 @@ filesys_remove (const char *name)
   if (!strcmp(name, "/") || !strcmp(name, ".") || !strcmp(name, ".."))
     return NULL;
 
-  size_t size = strlen(name) + 1;
-  char *path = malloc(size);
-  strlcpy(path, name, size);
-
-  if (path[size - 2] == '/')
-    path[size - 2] = '\0';
-  char *file_name = strrchr(path, '/');
-  if (file_name) {
-    *file_name++ = '\0';
-  } else {
-    free(path);
-    path = NULL;
-    file_name = (char *) name;
-  }
-
   struct dir *dir;
-  if (path) {
-    if (*path)
-      dir = dir_open_path(path);
-    else
-      dir = dir_open_root();
-  } else {
-    dir = dir_reopen(thread_current()->pwd);
-  }
+  char file_name[NAME_MAX + 1] = "";
+  dir_open_path(name, &dir, file_name);
 
   bool success = dir != NULL && dir_remove(dir, file_name);
-  free(path);
   dir_close (dir); 
 
   return success;

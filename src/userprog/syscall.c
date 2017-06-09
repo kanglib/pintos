@@ -419,6 +419,7 @@ static bool handle_chdir(const char *dir)
       dir_close(curr->pwd);
       curr->pwd = dir_open(inode_reopen(file_get_inode(file)));
       inode_inc_pwd_cnt(dir_get_inode(curr->pwd));
+      file_close(file);
       return true;
     }
     file_close(file);
