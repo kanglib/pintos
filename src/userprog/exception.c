@@ -178,10 +178,8 @@ page_fault (struct intr_frame *f)
         uint32_t bytes = page->load_info.bytes;
         if (bytes) {
           frame = frame_alloc(false);
-          lock_acquire(&fs_lock);
           file_seek(page->load_info.file, page->load_info.offset);
           file_read(page->load_info.file, frame, bytes);
-          lock_release(&fs_lock);
           memset(frame + bytes, 0, PGSIZE - bytes);
         } else {
           frame = frame_alloc(true);

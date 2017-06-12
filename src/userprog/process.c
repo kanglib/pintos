@@ -111,13 +111,11 @@ start_process (void *f_name)
   if_.eflags = FLAG_IF | FLAG_MBS;
   t = thread_current();
   sema_down(&t->sema2);
-  lock_acquire(&fs_lock);
   success = load (file_name, &if_.eip, &if_.esp);
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
   if (!success) {
-    lock_release(&fs_lock);
     t->is_failed = true;
     sema_up(&t->sema1);
     sema_down(&t->sema2);
@@ -125,7 +123,6 @@ start_process (void *f_name)
   }
 
   file_deny_write(t->exe);
-  lock_release(&fs_lock);
   sema_up(&t->sema1);
   sema_down(&t->sema2);
 
@@ -210,11 +207,9 @@ process_exit (void)
   lock_release(&page_global_lock);
 #endif
 
-  lock_acquire(&fs_lock);
   file_close(curr->exe);
   for (i = 2; i < curr->file_n; i++)
     file_close(curr->file[i]);
-  lock_release(&fs_lock);
 #ifdef FILESYS
   inode_dec_pwd_cnt(dir_get_inode(curr->pwd));
   dir_close(curr->pwd);

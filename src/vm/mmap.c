@@ -36,10 +36,8 @@ mapid_t mmap_map(struct file *file, void *addr)
   if (!addr || pg_round_down(addr) != addr)
     return -1;
 
-  lock_acquire(&fs_lock);
   file = file_reopen(file);
   off = file_length(file);
-  lock_release(&fs_lock);
 
   end = pg_round_up(addr + off);
   for (p = addr; p < end; p += PGSIZE)
@@ -51,9 +49,7 @@ mapid_t mmap_map(struct file *file, void *addr)
   off = 0;
   for (p = addr; p < end; p += PGSIZE) {
     if (!page_map(p, file, off, (bytes >= PGSIZE) ? PGSIZE : bytes, true)) {
-      lock_acquire(&fs_lock);
       file_close(file);
-      lock_release(&fs_lock);
 
       curr->exit_code = -1;
       thread_exit();
@@ -93,12 +89,10 @@ static void mmap_remove(struct mmap *mmap)
     page = page_lookup(p);
     if (page->status == PAGE_PRESENT) {
       if (pagedir_is_dirty(curr->pagedir, p)) {
-        lock_acquire(&fs_lock);
         file_seek(page->load_info.file, page->load_info.offset);
         file_write(page->load_info.file,
             page->mapping.frame,
             page->load_info.bytes);
-        lock_release(&fs_lock);
       }
       pagedir_clear_page(curr->pagedir, page->vaddr);
     }
@@ -107,9 +101,7 @@ static void mmap_remove(struct mmap *mmap)
     page_remove(page);
   }
 
-  lock_acquire(&fs_lock);
   file_close(mmap->file);
-  lock_release(&fs_lock);
   free(mmap);
 }
 

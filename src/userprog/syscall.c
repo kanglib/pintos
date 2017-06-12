@@ -57,13 +57,9 @@ static void read_args(const long *esp, long *args, int count);
 static void grow_stack(const void *vaddr, unsigned size, const void *esp);
 #endif
 
-/* External lock for base file system. */
-struct lock fs_lock;
-
 void
 syscall_init (void) 
 {
-  lock_init(&fs_lock);
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
 }
 
@@ -196,9 +192,7 @@ static bool handle_create(const char *file, unsigned initial_size)
 
   if (file[strlen(file) - 1] == '/')
     return false;
-  lock_acquire(&fs_lock);
   success = filesys_create(file, initial_size);
-  lock_release(&fs_lock);
   return success;
 }
 
@@ -209,9 +203,7 @@ static bool handle_remove(const char *file)
   if (!is_valid_vaddr(file, sizeof(char *)))
     handle_exit(-1);
 
-  lock_acquire(&fs_lock);
   success = filesys_remove(file);
-  lock_release(&fs_lock);
   return success;
 }
 
@@ -222,9 +214,7 @@ static int handle_open(const char *file)
   if (!is_valid_vaddr(file, sizeof(char *)))
     handle_exit(-1);
 
-  lock_acquire(&fs_lock);
   f = filesys_open(file);
-  lock_release(&fs_lock);
   if (f) {
     struct thread *t = thread_current();
     int fd = t->file_n++;
@@ -250,9 +240,7 @@ static int handle_filesize(int fd)
 
   if ((f = t->file[fd])) {
     off_t off;
-    lock_acquire(&fs_lock);
     off = file_length(f);
-    lock_release(&fs_lock);
     return off;
   } else {
     return -1;
@@ -287,9 +275,7 @@ static int handle_read(int fd, void *buffer, unsigned size, const void *esp)
     return size;
   } else if ((f = t->file[fd])) {
     off_t off;
-    lock_acquire(&fs_lock);
     off = file_read(f, buffer, size);
-    lock_release(&fs_lock);
     return off;
   } else {
     handle_exit(-1);
@@ -309,9 +295,7 @@ static int handle_write(int fd, const void *buffer, unsigned size)
     return printf("%s", (char *) buffer);
   } else if ((f = t->file[fd])) {
     off_t off;
-    lock_acquire(&fs_lock);
     off = file_write(f, buffer, size);
-    lock_release(&fs_lock);
     return off;
   } else {
     handle_exit(-1);
@@ -328,9 +312,7 @@ static void handle_seek(int fd, unsigned position)
     handle_exit(-1);
 
   if ((f = t->file[fd])) {
-    lock_acquire(&fs_lock);
     file_seek(f, position);
-    lock_release(&fs_lock);
   } else {
     handle_exit(-1);
   }
@@ -347,9 +329,7 @@ static unsigned handle_tell(int fd)
 
   if ((f = t->file[fd])) {
     off_t off;
-    lock_acquire(&fs_lock);
     off = file_tell(f);
-    lock_release(&fs_lock);
     return off;
   } else {
     handle_exit(-1);
@@ -366,9 +346,7 @@ static void handle_close(int fd)
     handle_exit(-1);
 
   if ((f = t->file[fd])) {
-    lock_acquire(&fs_lock);
     file_close(f);
-    lock_release(&fs_lock);
     t->file[fd] = NULL;
   } else {
     handle_exit(-1);

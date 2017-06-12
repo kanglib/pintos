@@ -7,6 +7,7 @@
 #include "filesys/free-map.h"
 #include "filesys/cache.h"
 #include "threads/malloc.h"
+#include "threads/synch.h"
 
 /* Identifies an inode. */
 #define INODE_MAGIC 0x494e4f44
@@ -40,6 +41,7 @@ struct inode
     bool removed;                       /* True if deleted, false otherwise. */
     int deny_write_cnt;                 /* 0: writes ok, >0: deny writes. */
     int pwd_cnt;                        /* 0: remove ok, >0: deny remove. */
+    struct lock mutex;                  /* Synchronization. */
   };
 
 #define TABLE_SIZE (DISK_SECTOR_SIZE / (int) sizeof(disk_sector_t))
@@ -186,11 +188,14 @@ static bool extend_one_block(struct inode *inode, off_t incr)
    returns the same `struct inode'. */
 static struct list open_inodes;
 
+static struct lock open_inodes_mutex;
+
 /* Initializes the inode module. */
 void
 inode_init (void) 
 {
   list_init (&open_inodes);
+  lock_init(&open_inodes_mutex);
 }
 
 /* Initializes an inode with LENGTH bytes of data and
@@ -243,6 +248,7 @@ inode_open (disk_sector_t sector)
   struct list_elem *e;
   struct inode *inode;
 
+  lock_acquire(&open_inodes_mutex);
   /* Check whether this inode is already open. */
   for (e = list_begin (&open_inodes); e != list_end (&open_inodes);
        e = list_next (e)) 
@@ -250,6 +256,7 @@ inode_open (disk_sector_t sector)
       inode = list_entry (e, struct inode, elem);
       if (inode->sector == sector) 
         {
+          lock_release(&open_inodes_mutex);
           inode_reopen (inode);
           return inode; 
         }
@@ -257,16 +264,20 @@ inode_open (disk_sector_t sector)
 
   /* Allocate memory. */
   inode = malloc (sizeof *inode);
-  if (inode == NULL)
+  if (inode == NULL) {
+    lock_release(&open_inodes_mutex);
     return NULL;
+  }
 
   /* Initialize. */
   list_push_front (&open_inodes, &inode->elem);
+  lock_release(&open_inodes_mutex);
   inode->sector = sector;
   inode->open_cnt = 1;
   inode->deny_write_cnt = 0;
   inode->removed = false;
   inode->pwd_cnt = 0;
+  lock_init(&inode->mutex);
   return inode;
 }
 
@@ -274,8 +285,14 @@ inode_open (disk_sector_t sector)
 struct inode *
 inode_reopen (struct inode *inode)
 {
-  if (inode != NULL)
+  if (inode != NULL) {
+    bool flag = lock_held_by_current_thread(&inode->mutex);
+    if (!flag)
+      lock_acquire(&inode->mutex);
     inode->open_cnt++;
+    if (!flag)
+      lock_release(&inode->mutex);
+  }
   return inode;
 }
 
@@ -296,6 +313,9 @@ inode_close (struct inode *inode)
   if (inode == NULL)
     return;
 
+  bool flag = lock_held_by_current_thread(&inode->mutex);
+  if (!flag)
+    lock_acquire(&inode->mutex);
   /* Release resources if this was the last opener. */
   if (--inode->open_cnt == 0)
     {
@@ -374,7 +394,10 @@ inode_close (struct inode *inode)
         }
 
       free (inode); 
+      inode = NULL;
     }
+  if (inode && !flag)
+    lock_release(&inode->mutex);
 }
 
 /* Marks INODE to be deleted when it is closed by the last caller who
@@ -383,7 +406,12 @@ void
 inode_remove (struct inode *inode) 
 {
   ASSERT (inode != NULL);
+  bool flag = lock_held_by_current_thread(&inode->mutex);
+  if (!flag)
+    lock_acquire(&inode->mutex);
   inode->removed = true;
+  if (!flag)
+    lock_release(&inode->mutex);
 }
 
 /* Reads SIZE bytes from INODE into BUFFER, starting at position OFFSET.
@@ -395,6 +423,9 @@ inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset)
   uint8_t *buffer = buffer_;
   off_t bytes_read = 0;
 
+  bool flag = lock_held_by_current_thread(&inode->mutex);
+  if (!flag)
+    lock_acquire(&inode->mutex);
   while (size > 0) 
     {
       /* Disk sector to read, starting byte offset within sector. */
@@ -418,6 +449,8 @@ inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset)
       offset += chunk_size;
       bytes_read += chunk_size;
     }
+  if (!flag)
+    lock_release(&inode->mutex);
 
   return bytes_read;
 }
@@ -434,8 +467,14 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
   const uint8_t *buffer = buffer_;
   off_t bytes_written = 0;
 
-  if (inode->deny_write_cnt)
+  bool flag = lock_held_by_current_thread(&inode->mutex);
+  if (!flag)
+    lock_acquire(&inode->mutex);
+  if (inode->deny_write_cnt) {
+    if (!flag)
+      lock_release(&inode->mutex);
     return 0;
+  }
 
   while (size > 0) 
     {
@@ -483,6 +522,8 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
       offset += chunk_size;
       bytes_written += chunk_size;
     }
+  if (!flag)
+    lock_release(&inode->mutex);
 
   return bytes_written;
 }
@@ -492,8 +533,13 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
 void
 inode_deny_write (struct inode *inode) 
 {
+  bool flag = lock_held_by_current_thread(&inode->mutex);
+  if (!flag)
+    lock_acquire(&inode->mutex);
   inode->deny_write_cnt++;
   ASSERT (inode->deny_write_cnt <= inode->open_cnt);
+  if (!flag)
+    lock_release(&inode->mutex);
 }
 
 /* Re-enables writes to INODE.
@@ -502,9 +548,14 @@ inode_deny_write (struct inode *inode)
 void
 inode_allow_write (struct inode *inode) 
 {
+  bool flag = lock_held_by_current_thread(&inode->mutex);
+  if (!flag)
+    lock_acquire(&inode->mutex);
   ASSERT (inode->deny_write_cnt > 0);
   ASSERT (inode->deny_write_cnt <= inode->open_cnt);
   inode->deny_write_cnt--;
+  if (!flag)
+    lock_release(&inode->mutex);
 }
 
 /* Returns the length, in bytes, of INODE's data. */
@@ -512,66 +563,115 @@ off_t
 inode_length (const struct inode *inode)
 {
   off_t length;
+  bool flag = lock_held_by_current_thread(&inode->mutex);
+  if (!flag)
+    lock_acquire((void *) &inode->mutex);
   cache_read(inode->sector,
              &length,
              offsetof(struct inode_disk, length),
              sizeof(off_t));
+  if (!flag)
+    lock_release((void *) &inode->mutex);
   return length;
 }
 
-enum file_type inode_get_type(const struct inode *inode)
+enum file_type inode_get_type(struct inode *inode)
 {
   enum file_type type;
+  bool flag = lock_held_by_current_thread(&inode->mutex);
+  if (!flag)
+    lock_acquire(&inode->mutex);
   cache_read(inode->sector,
              &type,
              offsetof(struct inode_disk, type),
              sizeof(enum file_type));
+  if (!flag)
+    lock_release(&inode->mutex);
   return type;
 }
 
 void inode_set_type(struct inode *inode, enum file_type type)
 {
+  bool flag = lock_held_by_current_thread(&inode->mutex);
+  if (!flag)
+    lock_acquire(&inode->mutex);
   cache_write(inode->sector,
               &type,
               offsetof(struct inode_disk, type),
               sizeof(enum file_type));
+  if (!flag)
+    lock_release(&inode->mutex);
 }
 
-disk_sector_t inode_get_parent(const struct inode *child)
+disk_sector_t inode_get_parent(struct inode *child)
 {
   disk_sector_t parent;
+  bool flag = lock_held_by_current_thread(&child->mutex);
+  if (!flag)
+    lock_acquire(&child->mutex);
   cache_read(child->sector,
              &parent,
              offsetof(struct inode_disk, parent),
              sizeof(disk_sector_t));
+  if (!flag)
+    lock_release(&child->mutex);
   return parent;
 }
 
-void inode_set_parent(struct inode *child, const struct inode *parent)
+void inode_set_parent(struct inode *child, struct inode *parent)
 {
   disk_sector_t pointer = parent->sector;
+  bool flag = lock_held_by_current_thread(&child->mutex);
+  if (!flag)
+    lock_acquire(&child->mutex);
   cache_write(child->sector,
               &pointer,
               offsetof(struct inode_disk, parent),
               sizeof(disk_sector_t));
+  if (!flag)
+    lock_release(&child->mutex);
 }
 
 bool inode_is_open(struct inode *inode)
 {
-  return inode->open_cnt != 1;
+  int open_cnt;
+  bool flag = lock_held_by_current_thread(&inode->mutex);
+  if (!flag)
+    lock_acquire(&inode->mutex);
+  open_cnt = inode->open_cnt;
+  if (!flag)
+    lock_release(&inode->mutex);
+  return open_cnt != 1;
 }
 
 int inode_get_pwd_cnt(struct inode *inode)
 {
-  return inode->pwd_cnt;
+  int pwd_cnt;
+  bool flag = lock_held_by_current_thread(&inode->mutex);
+  if (!flag)
+    lock_acquire(&inode->mutex);
+  pwd_cnt = inode->pwd_cnt;
+  if (!flag)
+    lock_release(&inode->mutex);
+  return pwd_cnt;
 }
 
 void inode_inc_pwd_cnt(struct inode *inode)
 {
+  bool flag = lock_held_by_current_thread(&inode->mutex);
+  if (!flag)
+    lock_acquire(&inode->mutex);
   inode->pwd_cnt++;
+  if (!flag)
+    lock_release(&inode->mutex);
 }
 
 void inode_dec_pwd_cnt(struct inode *inode)
 {
+  bool flag = lock_held_by_current_thread(&inode->mutex);
+  if (!flag)
+    lock_acquire(&inode->mutex);
   inode->pwd_cnt--;
+  if (!flag)
+    lock_release(&inode->mutex);
 }

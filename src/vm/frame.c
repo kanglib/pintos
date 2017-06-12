@@ -80,15 +80,10 @@ void *frame_alloc(bool zero)
     f->page->status = PAGE_LOADING;
     pagedir_clear_page(f->pagedir, f->page->vaddr);
     if (pagedir_is_dirty(f->pagedir, f->page->vaddr)) {
-      bool flag = lock_held_by_current_thread(&fs_lock);
-      if (!flag)
-        lock_acquire(&fs_lock);
       file_seek(f->page->load_info.file, f->page->load_info.offset);
       file_write(f->page->load_info.file,
                  (void *) f->paddr,
                  f->page->load_info.bytes);
-      if (!flag)
-        lock_release(&fs_lock);
     }
   } else {
     f->page->status = PAGE_SWAPPED;
