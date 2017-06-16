@@ -5,8 +5,8 @@ services:
   - docker
 
 before_install:
-  - docker pull kanglib/pintos-kaist-qemu
+  - docker pull hangpark/pintos-dev-env-kaist
 
 script:
-  - docker run -v $TRAVIS_BUILD_DIR:/pintos kanglib/pintos-kaist-qemu
+  - docker run -v $TRAVIS_BUILD_DIR:/pintos hangpark/pintos-dev-env-kaist
     sh -c "make -C src/$TARGET_DIRECTORY grade"
