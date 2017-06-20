@@ -175,7 +175,9 @@ process_exit (void)
   uint32_t *pd;
   int i;
 
+#ifndef SOUND
   printf("%s: exit(%d)\n", thread_name(), curr->exit_code);
+#endif
 
   list = &curr->child_list;
   for (e = list_begin(list); e != list_end(list);) {

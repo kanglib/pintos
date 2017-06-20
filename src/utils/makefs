@@ -1,0 +1,10 @@
+#!/bin/bash
+
+rm -f fs.dsk
+pintos-mkdisk fs.dsk 2
+pintos --qemu -- -f -q
+
+make -C ../../examples
+for i in $(find ../../examples | grep "../../examples/[a-z]\+$"); do
+  pintos --qemu -p $i -a ${i/..\/..\/examples\//} -- -q
+done

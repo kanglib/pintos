@@ -16,6 +16,7 @@ insult
 lineup
 matmult
 recursor
+crypto
 *.d
 *.a
 *.o
