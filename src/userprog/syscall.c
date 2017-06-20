@@ -292,7 +292,13 @@ static int handle_write(int fd, const void *buffer, unsigned size)
     handle_exit(-1);
 
   if (fd == 1) {
-    return printf("%s", (char *) buffer);
+    uint8_t *buf;
+    unsigned i;
+
+    buf = (uint8_t *) buffer;
+    for (i = 0; i < size; i++)
+      putchar(buf[i]);
+    return size;
   } else if ((f = t->file[fd])) {
     off_t off;
     off = file_write(f, buffer, size);
