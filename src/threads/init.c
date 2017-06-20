@@ -39,6 +39,9 @@
 #include "vm/page.h"
 #include "vm/swap.h"
 #endif
+#ifdef SOUND
+#include "sound/beep.h"
+#endif
 
 /* Amount of physical memory, in 4 kB pages. */
 size_t ram_pages;
@@ -124,6 +127,11 @@ main (void)
   frame_init();
   swap_init();
   lock_init(&page_global_lock);
+#endif
+
+#ifdef SOUND
+  /* Initialize sound system. */
+  beep_init();
 #endif
 
   printf ("Boot complete.\n");
@@ -307,6 +315,11 @@ run_actions (char **argv)
 #endif
       {NULL, 0, NULL},
     };
+
+  if (*argv == NULL) {
+    process_wait(process_execute("shell"));
+    power_off();
+  }
 
   while (*argv != NULL)
     {

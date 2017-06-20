@@ -182,3 +182,8 @@ inumber (int fd)
 {
   return syscall1 (SYS_INUMBER, fd);
 }
+
+void beep(uint16_t *stream, unsigned length)
+{
+  syscall2(SYS_BEEP, stream, length);
+}

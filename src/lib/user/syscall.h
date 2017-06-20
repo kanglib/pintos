@@ -3,6 +3,7 @@
 
 #include <stdbool.h>
 #include <debug.h>
+#include <stdint.h>
 
 /* Process identifier. */
 typedef int pid_t;
@@ -44,5 +45,8 @@ bool mkdir (const char *dir);
 bool readdir (int fd, char name[READDIR_MAX_LEN + 1]);
 bool isdir (int fd);
 int inumber (int fd);
+
+/* Sound system. */
+void beep(uint16_t *stream, unsigned length);
 
 #endif /* lib/user/syscall.h */

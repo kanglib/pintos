@@ -20,6 +20,9 @@
 #include "filesys/directory.h"
 #include "filesys/inode.h"
 #endif
+#ifdef SOUND
+#include "sound/beep.h"
+#endif
 
 /* Maximum number of system call arguments. */
 #define MAX_ARGS 3
@@ -48,6 +51,9 @@ static bool handle_mkdir(const char *dir);
 static bool handle_readdir(int fd, char *name, const void *esp);
 static bool handle_isdir(int fd);
 static int handle_inumber(int fd);
+#endif
+#ifdef SOUND
+static void handle_beep(uint16_t *stream, unsigned length);
 #endif
 
 static bool is_valid_vaddr(const void *vaddr, unsigned size);
@@ -152,6 +158,12 @@ static void syscall_handler(struct intr_frame *f)
   case SYS_INUMBER:
     read_args(f->esp, args, 1);
     f->eax = handle_inumber(args[0]);
+    break;
+#endif
+#ifdef SOUND
+  case SYS_BEEP:
+    read_args(f->esp, args, 2);
+    handle_beep((void *) args[0], args[1]);
     break;
 #endif
   default:
@@ -476,6 +488,15 @@ static int handle_inumber(int fd)
       return inode_get_inumber(file_get_inode(file));
   }
   handle_exit(-1);
+}
+#endif
+
+#ifdef SOUND
+static void handle_beep(uint16_t *stream, unsigned length)
+{
+  if (!is_valid_vaddr(stream, length * 4))
+    handle_exit(-1);
+  beep_stream(stream, length);
 }
 #endif
 
