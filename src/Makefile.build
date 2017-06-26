@@ -71,6 +71,8 @@ filesys_SRC += filesys/cache.c		# Buffer cache.
 
 # Sound system code.
 sound_SRC  = sound/beep.c		# Beep beep.
+sound_SRC += sound/sb16.c		# Sound Blaster 16 device.
+sound_SRC += sound/sound.c		# Sound system core.
 
 SOURCES = $(foreach dir,$(KERNEL_SUBDIRS),$($(dir)_SRC))
 OBJECTS = $(patsubst %.c,%.o,$(patsubst %.S,%.o,$(SOURCES)))

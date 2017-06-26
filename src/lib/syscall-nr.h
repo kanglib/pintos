@@ -32,6 +32,7 @@ enum
 
     /* Sound system. */
     SYS_BEEP,                   /* Beep beep. */
+    SYS_PLAY,                   /* Play a sound. */
   };
 
 #endif /* lib/syscall-nr.h */

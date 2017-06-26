@@ -61,6 +61,45 @@
           retval;                                               \
         })
 
+/* Invokes syscall NUMBER, passing arguments ARG0, ARG1, ARG2,
+   and ARG3, and returns the return value as an `int'. */
+#define syscall4(NUMBER, ARG0, ARG1, ARG2, ARG3)                \
+        ({                                                      \
+          int retval;                                           \
+          asm volatile                                          \
+            ("pushl %[arg3]; pushl %[arg2]; "                   \
+             "pushl %[arg1]; pushl %[arg0]; "                   \
+             "pushl %[number]; int $0x30; addl $20, %%esp"      \
+               : "=a" (retval)                                  \
+               : [number] "i" (NUMBER),                         \
+                 [arg0] "g" (ARG0),                             \
+                 [arg1] "g" (ARG1),                             \
+                 [arg2] "g" (ARG2),                             \
+                 [arg3] "g" (ARG3)                              \
+               : "memory");                                     \
+          retval;                                               \
+        })
+
+/* Invokes syscall NUMBER, passing arguments ARG0, ARG1, ARG2,
+   ARG3, and ARG4, and returns the return value as an `int'. */
+#define syscall5(NUMBER, ARG0, ARG1, ARG2, ARG3, ARG4)          \
+        ({                                                      \
+          int retval;                                           \
+          asm volatile                                          \
+            ("pushl %[arg4]; pushl %[arg3]; pushl %[arg2]; "    \
+             "pushl %[arg1]; pushl %[arg0]; "                   \
+             "pushl %[number]; int $0x30; addl $24, %%esp"      \
+               : "=a" (retval)                                  \
+               : [number] "i" (NUMBER),                         \
+                 [arg0] "g" (ARG0),                             \
+                 [arg1] "g" (ARG1),                             \
+                 [arg2] "g" (ARG2),                             \
+                 [arg3] "g" (ARG3),                             \
+                 [arg4] "g" (ARG4)                              \
+               : "memory");                                     \
+          retval;                                               \
+        })
+
 void
 halt (void) 
 {
@@ -186,4 +225,13 @@ inumber (int fd)
 void beep(uint16_t *stream, unsigned length)
 {
   syscall2(SYS_BEEP, stream, length);
+}
+
+bool play(int channels,
+          int bps,
+          int sample_rate,
+          const void *stream,
+          unsigned length)
+{
+  return syscall5(SYS_PLAY, channels, bps, sample_rate, stream, length);
 }

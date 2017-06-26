@@ -17,6 +17,7 @@ lineup
 matmult
 recursor
 crypto
+play
 *.d
 *.a
 *.o

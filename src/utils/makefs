@@ -5,6 +5,9 @@ pintos-mkdisk fs.dsk 2
 pintos --qemu -- -f -q
 
 make -C ../../examples
-for i in $(find ../../examples | grep "../../examples/[a-z]\+$"); do
+for i in cat halt hex-dump ls mcat shell crypto play; do
+  pintos --qemu -p ../../examples/$i -a $i -- -q
+done
+for i in $(find ../../examples | grep "../../examples/ouch"); do
   pintos --qemu -p $i -a ${i/..\/..\/examples\//} -- -q
 done

@@ -48,5 +48,10 @@ int inumber (int fd);
 
 /* Sound system. */
 void beep(uint16_t *stream, unsigned length);
+bool play(int channels,
+          int bps,
+          int sample_rate,
+          const void *stream,
+          unsigned length);
 
 #endif /* lib/user/syscall.h */

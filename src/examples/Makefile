@@ -4,7 +4,7 @@ SRCDIR = ..
 # To add a new test, put its name on the PROGS list
 # and then add a name_SRC line that lists its source files.
 PROGS = cat cmp cp echo halt hex-dump ls mcat mcp mkdir pwd rm shell \
-	bubsort insult lineup matmult recursor crypto
+	bubsort insult lineup matmult recursor crypto play
 
 # Should work from project 2 onward.
 cat_SRC = cat.c
@@ -32,6 +32,7 @@ shell_SRC = shell.c
 
 # Sound system.
 crypto_SRC = crypto.c
+play_SRC = play.c
 
 include $(SRCDIR)/Make.config
 include $(SRCDIR)/Makefile.userprog

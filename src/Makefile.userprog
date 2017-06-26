@@ -18,6 +18,7 @@ lib_SRC += lib/arithmetic.c
 lib/user_SRC  = lib/user/debug.c	# Debug helpers.
 lib/user_SRC += lib/user/syscall.c	# System calls.
 lib/user_SRC += lib/user/console.c	# Console code.
+lib/user_SRC += lib/user/wave.c		# WAV files.
 
 LIB_OBJ = $(patsubst %.c,%.o,$(patsubst %.S,%.o,$(lib_SRC) $(lib/user_SRC)))
 LIB_DEP = $(patsubst %.o,%.d,$(LIB_OBJ))

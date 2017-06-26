@@ -22,10 +22,11 @@
 #endif
 #ifdef SOUND
 #include "sound/beep.h"
+#include "sound/sound.h"
 #endif
 
 /* Maximum number of system call arguments. */
-#define MAX_ARGS 3
+#define MAX_ARGS 5
 
 static void syscall_handler (struct intr_frame *);
 
@@ -54,6 +55,11 @@ static int handle_inumber(int fd);
 #endif
 #ifdef SOUND
 static void handle_beep(uint16_t *stream, unsigned length);
+static bool handle_play(int channels,
+                        int bps,
+                        int sample_rate,
+                        const void *stream,
+                        unsigned length);
 #endif
 
 static bool is_valid_vaddr(const void *vaddr, unsigned size);
@@ -164,6 +170,10 @@ static void syscall_handler(struct intr_frame *f)
   case SYS_BEEP:
     read_args(f->esp, args, 2);
     handle_beep((void *) args[0], args[1]);
+    break;
+  case SYS_PLAY:
+    read_args(f->esp, args, 5);
+    handle_play(args[0], args[1], args[2], (void *) args[3], args[4]);
     break;
 #endif
   default:
@@ -492,6 +502,21 @@ static void handle_beep(uint16_t *stream, unsigned length)
   if (!is_valid_vaddr(stream, length * 4))
     handle_exit(-1);
   beep_stream(stream, length);
+}
+
+static bool handle_play(int channels,
+                        int bps,
+                        int sample_rate,
+                        const void *stream,
+                        unsigned length)
+{
+  if (!is_valid_vaddr(stream, length * bps / 8 * channels))
+    handle_exit(-1);
+  return sound_play(channels,
+                    bps,
+                    sample_rate,
+                    pagedir_get_page(thread_current()->pagedir, stream),
+                    length);
 }
 #endif
 

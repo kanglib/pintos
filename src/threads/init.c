@@ -40,7 +40,7 @@
 #include "vm/swap.h"
 #endif
 #ifdef SOUND
-#include "sound/beep.h"
+#include "sound/sound.h"
 #endif
 
 /* Amount of physical memory, in 4 kB pages. */
@@ -131,7 +131,7 @@ main (void)
 
 #ifdef SOUND
   /* Initialize sound system. */
-  beep_init();
+  sound_init();
 #endif
 
   printf ("Boot complete.\n");
